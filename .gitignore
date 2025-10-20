@@ -7,7 +7,7 @@ node_modules/
 .env.production
 
 # Build output
-dist/
+# dist/  (commenté pour déploiement Render)
 
 # Logs
 logs/
