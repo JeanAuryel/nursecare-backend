@@ -4,16 +4,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
-const promise_1 = __importDefault(require("mysql2/promise"));
+const pg_1 = require("pg");
 dotenv_1.default.config();
-dotenv_1.default.config();
-const pool = promise_1.default.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+// Configuration PostgreSQL
+const pool = new pg_1.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+// Test de connexion
+pool.on('connect', () => {
+    console.log('✅ Connecté à PostgreSQL');
+});
+pool.on('error', (err) => {
+    console.error('❌ Erreur PostgreSQL:', err);
 });
 exports.default = pool;
