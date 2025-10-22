@@ -38,7 +38,7 @@ export interface IStagiaireDetailed extends IStagiaire {
 
 export class Stagiaire {
     static async create(stagiaire: Partial<IStagiaire>): Promise<number> {
-        const [result]: any = await pool.execute(
+        const result = await pool.query(
             `INSERT INTO Stagiaire (nomStagiaire, prenomStagiaire, idEcole, idTuteur, mailStagiaire, numStagiaire, dateDebutStage, dateFinStage)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
@@ -52,22 +52,22 @@ export class Stagiaire {
                 stagiaire.dateFinStage || null
             ]
         );
-        return result.insertId;
+        return result.rows[0].idstagiaire;
     }
 
     static async getAll(): Promise<IStagiaire[]> {
-        const [rows]: any = await pool.execute(`SELECT * FROM Stagiaire ORDER BY nomStagiaire, prenomStagiaire`);
-        return rows;
+        const result = await pool.query(`SELECT * FROM Stagiaire ORDER BY nomStagiaire, prenomStagiaire`);
+        return result.rows;
     }
 
     static async getOne(idStagiaire: number): Promise<IStagiaire | null> {
-        const [rows]: any = await pool.execute(`SELECT * FROM Stagiaire WHERE idStagiaire = ?`, [idStagiaire]);
-        return rows.length ? rows[0] : null;
+        const result = await pool.query(`SELECT * FROM Stagiaire WHERE idStagiaire = $1`, [idStagiaire]);
+        return result.rows.length ? result.rows[0] : null;
     }
 
     static async getOneDetailed(idStagiaire: number): Promise<IStagiaireDetailed | null> {
         // Récupérer le stagiaire
-        const [stagiaires]: any = await pool.execute(
+        const stagiairesResult = await pool.query(
             `SELECT S.*, E.nomEcole, E.contactReferent
              FROM Stagiaire S
              LEFT JOIN Ecole E ON S.idEcole = E.idEcole
@@ -75,21 +75,21 @@ export class Stagiaire {
             [idStagiaire]
         );
 
-        if (stagiaires.length === 0) return null;
+        if (stagiairesResult.rows.length === 0) return null;
 
-        const stagiaire = stagiaires[0];
+        const stagiaire = stagiairesResult.rows[0];
 
         // Récupérer le tuteur si existe
         if (stagiaire.idTuteur) {
-            const [tuteurs]: any = await pool.execute(
-                `SELECT idEmploye, nomEmploye, prenomEmploye FROM Employe WHERE idEmploye = ?`,
+            const tuteursResult = await pool.query(
+                `SELECT idEmploye, nomEmploye, prenomEmploye FROM Employe WHERE idEmploye = $1`,
                 [stagiaire.idTuteur]
             );
-            stagiaire.tuteur = tuteurs[0] || null;
+            stagiaire.tuteur = tuteursResult.rows[0] || null;
         }
 
         // Récupérer les notes et appréciations
-        const [notes]: any = await pool.execute(
+        const notesResult = await pool.query(
             `SELECT R.idRdv, R.noteStagiaire, R.commentaireStagiaire, R.timestamp_RDV_reel as dateRdv, P.nomPrestation
              FROM RDV R
              LEFT JOIN Prestation P ON R.idPrestation = P.idPrestation
@@ -98,7 +98,7 @@ export class Stagiaire {
             [idStagiaire]
         );
 
-        stagiaire.notes = notes;
+        stagiaire.notes = notesResult.rows;
 
         return stagiaire;
     }
@@ -108,7 +108,7 @@ export class Stagiaire {
         const values: any[] = [];
 
         if (stagiaire.nomStagiaire !== undefined) {
-            fields.push('nomStagiaire = ?');
+            fields.push('nomStagiaire = $1'));
             values.push(stagiaire.nomStagiaire);
         }
         if (stagiaire.prenomStagiaire !== undefined) {
@@ -144,15 +144,15 @@ export class Stagiaire {
 
         values.push(idStagiaire);
 
-        const [result]: any = await pool.execute(
-            `UPDATE Stagiaire SET ${fields.join(', ')} WHERE idStagiaire = ?`,
+        const result = await pool.query(
+            `UPDATE Stagiaire SET ${fields.join(', ')} WHERE idStagiaire = $1`,
             values
         );
-        return result.affectedRows;
+        return result.rowCount || 0;
     }
 
     static async delete(idStagiaire: number): Promise<number> {
-        const [result]: any = await pool.execute(`DELETE FROM Stagiaire WHERE idStagiaire = ?`, [idStagiaire]);
-        return result.affectedRows;
+        const result = await pool.query(`DELETE FROM Stagiaire WHERE idStagiaire = $1`, [idStagiaire]);
+        return result.rowCount || 0;
     }
 }

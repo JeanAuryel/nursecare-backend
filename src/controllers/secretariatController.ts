@@ -10,7 +10,7 @@ import { StatutFacture, ModePaiement } from '../models/facture';
 export async function getDashboardSecretariat(req: Request, res: Response) {
   try {
     // RDV du jour
-    const [rdvDuJour]: any = await pool.execute(
+    const [rdvDuJour]: any = await pool.query(
       `SELECT COUNT(*) as total
        FROM RDV
        WHERE DATE(timestamp_RDV_prevu) = CURDATE()
@@ -18,7 +18,7 @@ export async function getDashboardSecretariat(req: Request, res: Response) {
     );
 
     // RDV de demain (pour rappels)
-    const [rdvDemain]: any = await pool.execute(
+    const [rdvDemain]: any = await pool.query(
       `SELECT COUNT(*) as total
        FROM RDV
        WHERE DATE(timestamp_RDV_prevu) = DATE_ADD(CURDATE(), INTERVAL 1 DAY)
@@ -26,14 +26,14 @@ export async function getDashboardSecretariat(req: Request, res: Response) {
     );
 
     // Factures en attente de paiement
-    const [facturesEnAttente]: any = await pool.execute(
+    const [facturesEnAttente]: any = await pool.query(
       `SELECT COUNT(*) as total, COALESCE(SUM(montantTTC - COALESCE(montantPaye, 0)), 0) as montantTotal
        FROM Facture
        WHERE statutFacture IN ('ENVOYEE', 'PARTIELLE', 'IMPAYEE')`
     );
 
     // Factures impayées (en retard)
-    const [facturesEnRetard]: any = await pool.execute(
+    const [facturesEnRetard]: any = await pool.query(
       `SELECT COUNT(*) as total, COALESCE(SUM(montantTTC), 0) as montantTotal
        FROM Facture
        WHERE statutFacture = 'IMPAYEE'
@@ -41,7 +41,7 @@ export async function getDashboardSecretariat(req: Request, res: Response) {
     );
 
     // Prestations à facturer
-    const [prestationsAFacturer]: any = await pool.execute(
+    const [prestationsAFacturer]: any = await pool.query(
       `SELECT COUNT(*) as total
        FROM RDV
        WHERE timestamp_RDV_reel IS NOT NULL
@@ -49,7 +49,7 @@ export async function getDashboardSecretariat(req: Request, res: Response) {
     );
 
     // Patients vus cette semaine
-    const [patientsSemaine]: any = await pool.execute(
+    const [patientsSemaine]: any = await pool.query(
       `SELECT COUNT(DISTINCT idPatient) as total
        FROM RDV
        WHERE timestamp_RDV_reel IS NOT NULL
@@ -85,7 +85,7 @@ export async function getRDVDuJour(req: Request, res: Response) {
   try {
     const date = req.query.date || new Date().toISOString().split('T')[0];
 
-    const [rdv]: any = await pool.execute(
+    const [rdv]: any = await pool.query(
       `SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
@@ -125,7 +125,7 @@ export async function getRDVDeLaSemaine(req: Request, res: Response) {
   try {
     const date = req.query.date || new Date().toISOString().split('T')[0];
 
-    const [rdv]: any = await pool.execute(
+    const [rdv]: any = await pool.query(
       `SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
@@ -162,7 +162,7 @@ export async function getRDVEmployeDuJour(req: Request, res: Response) {
     const { id } = req.params;
     const date = req.query.date || new Date().toISOString().split('T')[0];
 
-    const [rdv]: any = await pool.execute(
+    const [rdv]: any = await pool.query(
       `SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
@@ -209,13 +209,13 @@ export async function getDisponibilites(req: Request, res: Response) {
     const params: any[] = [date];
 
     if (idEmploye) {
-      query += ` AND idEmploye = ?`;
+      query += ` AND idEmploye = $1`;
       params.push(idEmploye);
     }
 
     query += ` ORDER BY timestamp_RDV_prevu`;
 
-    const [rdvExistants]: any = await pool.execute(query, params);
+    const [rdvExistants]: any = await pool.query(query, params);
 
     // Générer les créneaux de 8h à 18h par tranches de 30 minutes
     const creneaux = [];
@@ -255,7 +255,7 @@ export async function getDisponibilites(req: Request, res: Response) {
  */
 export async function getRDVARappeler(req: Request, res: Response) {
   try {
-    const [rdv]: any = await pool.execute(
+    const [rdv]: any = await pool.query(
       `SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
@@ -298,7 +298,7 @@ export async function enregistrerPaiement(req: Request, res: Response) {
     }
 
     // Récupérer la facture
-    const [factures]: any = await pool.execute(
+    const [factures]: any = await pool.query(
       'SELECT * FROM Facture WHERE idFacture = ?',
       [idFacture]
     );
@@ -323,7 +323,7 @@ export async function enregistrerPaiement(req: Request, res: Response) {
     }
 
     // Mettre à jour la facture
-    await pool.execute(
+    await pool.query(
       `UPDATE Facture
        SET montantPaye = ?,
            statutFacture = ?,
@@ -350,7 +350,7 @@ export async function enregistrerPaiement(req: Request, res: Response) {
  */
 export async function getFacturesEnAttente(req: Request, res: Response) {
   try {
-    const [factures]: any = await pool.execute(
+    const [factures]: any = await pool.query(
       `SELECT
         f.idFacture,
         f.numeroFacture,
@@ -384,7 +384,7 @@ export async function getFacturesEnAttente(req: Request, res: Response) {
  */
 export async function getFacturesEnRetard(req: Request, res: Response) {
   try {
-    const [factures]: any = await pool.execute(
+    const [factures]: any = await pool.query(
       `SELECT
         f.idFacture,
         f.numeroFacture,
@@ -423,7 +423,7 @@ export async function getHistoriquePatient(req: Request, res: Response) {
     const { id } = req.params;
 
     // Informations du patient
-    const [patient]: any = await pool.execute(
+    const [patient]: any = await pool.query(
       'SELECT * FROM Patient WHERE idPatient = ?',
       [id]
     );
@@ -433,7 +433,7 @@ export async function getHistoriquePatient(req: Request, res: Response) {
     }
 
     // Historique des RDV
-    const [rdv]: any = await pool.execute(
+    const [rdv]: any = await pool.query(
       `SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
@@ -456,7 +456,7 @@ export async function getHistoriquePatient(req: Request, res: Response) {
     );
 
     // Historique des factures
-    const [factures]: any = await pool.execute(
+    const [factures]: any = await pool.query(
       `SELECT
         f.idFacture,
         f.numeroFacture,
@@ -474,7 +474,7 @@ export async function getHistoriquePatient(req: Request, res: Response) {
     );
 
     // Statistiques
-    const [stats]: any = await pool.execute(
+    const [stats]: any = await pool.query(
       `SELECT
         COUNT(DISTINCT r.idRdv) as nombreRDV,
         COUNT(DISTINCT CASE WHEN r.timestamp_RDV_reel IS NOT NULL THEN r.idRdv END) as nombreRDVRealises,
@@ -506,7 +506,7 @@ export async function getFacturesImpayeesPatient(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
-    const [factures]: any = await pool.execute(
+    const [factures]: any = await pool.query(
       `SELECT
         f.idFacture,
         f.numeroFacture,

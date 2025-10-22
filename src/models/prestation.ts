@@ -13,15 +13,15 @@ export interface IPrestation {
 
 export class Prestation {
     static async create(prestation: IPrestation): Promise<number> {
-        const [result]: any = await pool.execute(
-            `INSERT INTO Prestation (nomPrestation, prix_TTC, idCategorie) VALUES (?, ?, ?)`,
+        const result = await pool.query(
+            `INSERT INTO Prestation (nomPrestation, prix_TTC, idCategorie) VALUES ($1, $2, $3) RETURNING idPrestation`,
             [prestation.nomPrestation, prestation.prix_TTC, prestation.idCategorie]
         );
-        return result.insertId;
+        return result.rows[0].idprestation;
     }
 
     static async getAll(): Promise<IPrestation[]> {
-        const [rows]: any = await pool.execute(`
+        const result = await pool.query(`
             SELECT
                 p.idPrestation,
                 p.nomPrestation,
@@ -34,7 +34,7 @@ export class Prestation {
         `);
 
         // Restructurer les données pour inclure l'objet categorie
-        return rows.map((row: any) => ({
+        return result.rows.map((row: any) => ({
             idPrestation: row.idPrestation,
             nomPrestation: row.nomPrestation,
             prix_TTC: row.prix_TTC,
@@ -47,7 +47,7 @@ export class Prestation {
     }
 
     static async getOne(idPrestation: number): Promise<IPrestation | null> {
-        const [rows]: any = await pool.execute(`
+        const result = await pool.query(`
             SELECT
                 p.idPrestation,
                 p.nomPrestation,
@@ -59,9 +59,9 @@ export class Prestation {
             WHERE p.idPrestation = ?
         `, [idPrestation]);
 
-        if (rows.length === 0) return null;
+        if (result.rows.length === 0) return null;
 
-        const row = rows[0];
+        const row = result.rows[0];
         return {
             idPrestation: row.idPrestation,
             nomPrestation: row.nomPrestation,
@@ -75,15 +75,15 @@ export class Prestation {
     }
 
     static async update(idPrestation: number, prestation: IPrestation): Promise<number> {
-        const [result]: any = await pool.execute(
-            `UPDATE Prestation SET nomPrestation = ?, prix_TTC = ?, idCategorie = ? WHERE idPrestation = ?`,
+        const result = await pool.query(
+            `UPDATE Prestation SET nomPrestation = $1, prix_TTC = $2, idCategorie = $3 WHERE idPrestation = $4`,
             [prestation.nomPrestation, prestation.prix_TTC, prestation.idCategorie, idPrestation]
         );
-        return result.affectedRows;
+        return result.rowCount || 0;
     }
 
     static async delete(idPrestation: number): Promise<number> {
-        const [result]: any = await pool.execute(`DELETE FROM Prestation WHERE idPrestation = ?`, [idPrestation]);
-        return result.affectedRows;
+        const result = await pool.query(`DELETE FROM Prestation WHERE idPrestation = $1`, [idPrestation]);
+        return result.rowCount || 0;
     }
 }

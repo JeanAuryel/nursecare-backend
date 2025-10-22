@@ -21,9 +21,9 @@ export interface IEcoleForm {
 
 export class Ecole {
   static async create(ecoleData: IEcoleForm): Promise<IEcole> {
-    const [result]: any = await pool.execute(
+    const result = await pool.query(
       `INSERT INTO Ecole (nomEcole, adresseEcole, villeEcole, codePostalEcole, numEcole, contactReferent)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING idEcole`,
       [
         ecoleData.nomEcole,
         ecoleData.adresseEcole,
@@ -33,40 +33,40 @@ export class Ecole {
         ecoleData.contactReferent
       ]
     );
-    const id = result.insertId;
-    const [rows]: any = await pool.execute(
-      `SELECT * FROM Ecole WHERE idEcole = ?`,
+    const id = result.rows[0].idecole;
+    const selectResult = await pool.query(
+      `SELECT * FROM Ecole WHERE idEcole = $1`,
       [id]
     );
-    return rows[0];
+    return selectResult.rows[0];
   }
 
   static async getAll(): Promise<IEcole[]> {
-    const [rows]: any = await pool.execute(`SELECT * FROM Ecole ORDER BY nomEcole`);
-    return rows;
+    const result = await pool.query(`SELECT * FROM Ecole ORDER BY nomEcole`);
+    return result.rows;
   }
 
   static async getAllWithStagiaires(): Promise<any[]> {
-    const [ecoles]: any = await pool.execute(`SELECT * FROM Ecole ORDER BY nomEcole`);
+    const ecolesResult = await pool.query(`SELECT * FROM Ecole ORDER BY nomEcole`);
 
     // Pour chaque école, récupérer ses stagiaires
-    for (const ecole of ecoles) {
-      const [stagiaires]: any = await pool.execute(
-        `SELECT * FROM Stagiaire WHERE idEcole = ? ORDER BY nomStagiaire, prenomStagiaire`,
+    for (const ecole of ecolesResult.rows) {
+      const stagiairesResult = await pool.query(
+        `SELECT * FROM Stagiaire WHERE idEcole = $1 ORDER BY nomStagiaire, prenomStagiaire`,
         [ecole.idEcole]
       );
-      ecole.stagiaires = stagiaires;
+      ecole.stagiaires = stagiairesResult.rows;
     }
 
     return ecoles;
   }
 
   static async getOne(idEcole: number): Promise<IEcole | null> {
-    const [rows]: any = await pool.execute(
-      `SELECT * FROM Ecole WHERE idEcole = ?`,
+    const result = await pool.query(
+      `SELECT * FROM Ecole WHERE idEcole = $1`,
       [idEcole]
     );
-    return rows.length ? rows[0] : null;
+    return result.rows.length ? result.rows[0] : null;
   }
 
   static async update(idEcole: number, ecoleData: Partial<IEcoleForm>): Promise<IEcole | null> {
@@ -104,8 +104,8 @@ export class Ecole {
 
     values.push(idEcole);
 
-    await pool.execute(
-      `UPDATE Ecole SET ${fields.join(', ')} WHERE idEcole = ?`,
+    await pool.query(
+      `UPDATE Ecole SET ${fields.join(', ')} WHERE idEcole = $1`,
       values
     );
 
@@ -113,10 +113,10 @@ export class Ecole {
   }
 
   static async delete(idEcole: number): Promise<number> {
-    const [result]: any = await pool.execute(
-      `DELETE FROM Ecole WHERE idEcole = ?`,
+    const result = await pool.query(
+      `DELETE FROM Ecole WHERE idEcole = $1`,
       [idEcole]
     );
-    return result.affectedRows;
+    return result.rowCount || 0;
   }
 }

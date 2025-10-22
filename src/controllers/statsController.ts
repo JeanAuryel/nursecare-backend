@@ -10,41 +10,41 @@ import pool from '../config/dbconfig';
 export async function getDashboardStats(req: Request, res: Response) {
   try {
     // Nombre total d'employés
-    const [employeCount]: any = await pool.execute(
+    const [employeCount]: any = await pool.query(
       'SELECT COUNT(*) as total FROM Employe'
     );
 
     // Nombre total de patients
-    const [patientCount]: any = await pool.execute(
+    const [patientCount]: any = await pool.query(
       'SELECT COUNT(*) as total FROM Patient'
     );
 
     // Nombre total de prestations réalisées
-    const [prestationsRealisees]: any = await pool.execute(
+    const [prestationsRealisees]: any = await pool.query(
       'SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NOT NULL'
     );
 
     // Nombre de RDV prévus (à venir)
-    const [rdvPrevus]: any = await pool.execute(
+    const [rdvPrevus]: any = await pool.query(
       'SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu > NOW()'
     );
 
     // Chiffre d'affaires total (factures payées)
-    const [caTotal]: any = await pool.execute(
+    const [caTotal]: any = await pool.query(
       `SELECT COALESCE(SUM(montantTTC), 0) as total
        FROM Facture
        WHERE statutFacture IN ('PAYEE', 'PARTIELLE')`
     );
 
     // Chiffre d'affaires en attente (factures envoyées non payées)
-    const [caEnAttente]: any = await pool.execute(
+    const [caEnAttente]: any = await pool.query(
       `SELECT COALESCE(SUM(montantTTC - COALESCE(montantPaye, 0)), 0) as total
        FROM Facture
        WHERE statutFacture IN ('ENVOYEE', 'PARTIELLE', 'IMPAYEE')`
     );
 
     // Nombre de factures impayées
-    const [facturesImpayees]: any = await pool.execute(
+    const [facturesImpayees]: any = await pool.query(
       `SELECT COUNT(*) as count FROM Facture WHERE statutFacture = 'IMPAYEE'`
     );
 
@@ -71,7 +71,7 @@ export async function getDashboardStats(req: Request, res: Response) {
 export async function getFinancierGlobal(req: Request, res: Response) {
   try {
     // Chiffre d'affaires total par statut
-    const [caParStatut]: any = await pool.execute(
+    const [caParStatut]: any = await pool.query(
       `SELECT
         statutFacture,
         COUNT(*) as nombreFactures,
@@ -82,7 +82,7 @@ export async function getFinancierGlobal(req: Request, res: Response) {
     );
 
     // Chiffre d'affaires par mode de paiement
-    const [caParModePaiement]: any = await pool.execute(
+    const [caParModePaiement]: any = await pool.query(
       `SELECT
         modePaiement,
         COUNT(*) as nombreFactures,
@@ -93,7 +93,7 @@ export async function getFinancierGlobal(req: Request, res: Response) {
     );
 
     // Montant moyen des factures
-    const [montantMoyen]: any = await pool.execute(
+    const [montantMoyen]: any = await pool.query(
       `SELECT
         AVG(montantTTC) as montantMoyen,
         MIN(montantTTC) as montantMin,
@@ -102,7 +102,7 @@ export async function getFinancierGlobal(req: Request, res: Response) {
     );
 
     // Taux de recouvrement
-    const [tauxRecouvrement]: any = await pool.execute(
+    const [tauxRecouvrement]: any = await pool.query(
       `SELECT
         COALESCE(SUM(CASE WHEN statutFacture IN ('PAYEE', 'PARTIELLE') THEN montantPaye ELSE 0 END), 0) as montantRecouvre,
         COALESCE(SUM(montantTTC), 0) as montantTotal
@@ -141,7 +141,7 @@ export async function getCAMensuel(req: Request, res: Response) {
   try {
     const annee = req.query.annee || new Date().getFullYear();
 
-    const [caMensuel]: any = await pool.execute(
+    const [caMensuel]: any = await pool.query(
       `SELECT
         MONTH(dateFacture) as mois,
         MONTHNAME(dateFacture) as nomMois,
@@ -168,7 +168,7 @@ export async function getCAMensuel(req: Request, res: Response) {
  */
 export async function getCAParEmploye(req: Request, res: Response) {
   try {
-    const [caParEmploye]: any = await pool.execute(
+    const [caParEmploye]: any = await pool.query(
       `SELECT
         e.idEmploye,
         e.nomEmploye,
@@ -202,22 +202,22 @@ export async function getCAParEmploye(req: Request, res: Response) {
 export async function getRDVGlobal(req: Request, res: Response) {
   try {
     // Nombre total de RDV
-    const [totalRdv]: any = await pool.execute(
+    const [totalRdv]: any = await pool.query(
       'SELECT COUNT(*) as total FROM RDV'
     );
 
     // RDV réalisés
-    const [rdvRealises]: any = await pool.execute(
+    const [rdvRealises]: any = await pool.query(
       'SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NOT NULL'
     );
 
     // RDV prévus (à venir)
-    const [rdvPrevus]: any = await pool.execute(
+    const [rdvPrevus]: any = await pool.query(
       'SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu > NOW()'
     );
 
     // RDV manqués (prévus dans le passé mais non réalisés)
-    const [rdvManques]: any = await pool.execute(
+    const [rdvManques]: any = await pool.query(
       'SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu < NOW()'
     );
 
@@ -250,7 +250,7 @@ export async function getRDVParJour(req: Request, res: Response) {
       return res.status(400).json({ message: 'Les paramètres debut et fin sont requis' });
     }
 
-    const [rdvParJour]: any = await pool.execute(
+    const [rdvParJour]: any = await pool.query(
       `SELECT
         DATE(timestamp_RDV_reel) as jour,
         COUNT(*) as nombreRDV,
@@ -278,7 +278,7 @@ export async function getRDVParMois(req: Request, res: Response) {
   try {
     const annee = req.query.annee || new Date().getFullYear();
 
-    const [rdvParMois]: any = await pool.execute(
+    const [rdvParMois]: any = await pool.query(
       `SELECT
         MONTH(timestamp_RDV_reel) as mois,
         MONTHNAME(timestamp_RDV_reel) as nomMois,
@@ -322,7 +322,7 @@ export async function getRDVParEmploye(req: Request, res: Response) {
     const params: any[] = [];
 
     if (debut && fin) {
-      query += ` AND DATE(r.timestamp_RDV_reel) BETWEEN ? AND ?`;
+      query += ` AND DATE(r.timestamp_RDV_reel) BETWEEN $1 AND $2`;
       params.push(debut, fin);
     }
 
@@ -331,7 +331,7 @@ export async function getRDVParEmploye(req: Request, res: Response) {
       ORDER BY nombreRDV DESC
     `;
 
-    const [rdvParEmploye]: any = await pool.execute(query, params);
+    const [rdvParEmploye]: any = await pool.query(query, params);
 
     res.status(200).json(rdvParEmploye);
   } catch (error) {
@@ -353,7 +353,7 @@ export async function getRDVEmployeParJour(req: Request, res: Response) {
       return res.status(400).json({ message: 'Les paramètres debut et fin sont requis' });
     }
 
-    const [rdvParJour]: any = await pool.execute(
+    const [rdvParJour]: any = await pool.query(
       `SELECT
         DATE(timestamp_RDV_reel) as jour,
         COUNT(*) as nombreRDV,
@@ -382,12 +382,12 @@ export async function getRDVEmployeParJour(req: Request, res: Response) {
 export async function getPatientsGlobal(req: Request, res: Response) {
   try {
     // Nombre total de patients
-    const [totalPatients]: any = await pool.execute(
+    const [totalPatients]: any = await pool.query(
       'SELECT COUNT(*) as total FROM Patient'
     );
 
     // Patients actifs (ayant eu au moins un RDV dans les 6 derniers mois)
-    const [patientsActifs]: any = await pool.execute(
+    const [patientsActifs]: any = await pool.query(
       `SELECT COUNT(DISTINCT idPatient) as total
        FROM RDV
        WHERE timestamp_RDV_reel IS NOT NULL
@@ -398,7 +398,7 @@ export async function getPatientsGlobal(req: Request, res: Response) {
     const patientsInactifs = totalPatients[0].total - patientsActifs[0].total;
 
     // Patient le plus récent
-    const [dernierPatient]: any = await pool.execute(
+    const [dernierPatient]: any = await pool.query(
       `SELECT idPatient, nomPatient, prenomPatient, createdAt
        FROM Patient
        ORDER BY createdAt DESC
@@ -424,7 +424,7 @@ export async function getNouveauxPatientsParMois(req: Request, res: Response) {
   try {
     const annee = req.query.annee || new Date().getFullYear();
 
-    const [nouveauxPatients]: any = await pool.execute(
+    const [nouveauxPatients]: any = await pool.query(
       `SELECT
         MONTH(createdAt) as mois,
         MONTHNAME(createdAt) as nomMois,
@@ -451,7 +451,7 @@ export async function getTopPatients(req: Request, res: Response) {
     const limit = parseInt(req.query.limit as string) || 10;
 
     // Récupérer les derniers patients avec RDV réalisés
-    const [patients]: any = await pool.execute(
+    const [patients]: any = await pool.query(
       `SELECT DISTINCT
         p.idPatient,
         p.nomPatient,
@@ -471,7 +471,7 @@ export async function getTopPatients(req: Request, res: Response) {
     const patientsWithDetails = await Promise.all(
       patients.map(async (patient: any) => {
         // Prestations réalisées
-        const [prestations]: any = await pool.execute(
+        const [prestations]: any = await pool.query(
           `SELECT
             pr.nomPrestation,
             pr.prix_TTC,
@@ -485,7 +485,7 @@ export async function getTopPatients(req: Request, res: Response) {
         );
 
         // Total facturé
-        const [factureTotal]: any = await pool.execute(
+        const [factureTotal]: any = await pool.query(
           `SELECT
             COUNT(*) as nombre_factures,
             COALESCE(SUM(montantTTC), 0) as montant_total_facture,
@@ -496,7 +496,7 @@ export async function getTopPatients(req: Request, res: Response) {
         );
 
         // Nombre total de RDV
-        const [rdvCount]: any = await pool.execute(
+        const [rdvCount]: any = await pool.query(
           `SELECT COUNT(*) as nombre_rdv
            FROM RDV
            WHERE idPatient = ? AND timestamp_RDV_reel IS NOT NULL`,
@@ -530,7 +530,7 @@ export async function getPrestationsPopulaires(req: Request, res: Response) {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
 
-    const [prestations]: any = await pool.execute(
+    const [prestations]: any = await pool.query(
       `SELECT
         pr.idPrestation,
         pr.nomPrestation,
@@ -559,7 +559,7 @@ export async function getPrestationsPopulaires(req: Request, res: Response) {
  */
 export async function getPerformanceEmployes(req: Request, res: Response) {
   try {
-    const [performance]: any = await pool.execute(
+    const [performance]: any = await pool.query(
       `SELECT
         e.idEmploye,
         e.nomEmploye,
@@ -593,7 +593,7 @@ export async function getStatsEmployeDetaille(req: Request, res: Response) {
     const { id } = req.params;
 
     // Informations de l'employé
-    const [employe]: any = await pool.execute(
+    const [employe]: any = await pool.query(
       'SELECT idEmploye, nomEmploye, prenomEmploye, mailEmploye, roleEmploye FROM Employe WHERE idEmploye = ?',
       [id]
     );
@@ -603,7 +603,7 @@ export async function getStatsEmployeDetaille(req: Request, res: Response) {
     }
 
     // Statistiques générales
-    const [stats]: any = await pool.execute(
+    const [stats]: any = await pool.query(
       `SELECT
         COUNT(DISTINCT r.idRdv) as totalPrestations,
         COUNT(DISTINCT r.idPatient) as totalPatients,
@@ -615,7 +615,7 @@ export async function getStatsEmployeDetaille(req: Request, res: Response) {
     );
 
     // Prestations par mois (12 derniers mois)
-    const [prestationsParMois]: any = await pool.execute(
+    const [prestationsParMois]: any = await pool.query(
       `SELECT
         DATE_FORMAT(timestamp_RDV_reel, '%Y-%m') as mois,
         COUNT(*) as nombrePrestations
@@ -629,7 +629,7 @@ export async function getStatsEmployeDetaille(req: Request, res: Response) {
     );
 
     // Top prestations réalisées
-    const [topPrestations]: any = await pool.execute(
+    const [topPrestations]: any = await pool.query(
       `SELECT
         pr.nomPrestation,
         COUNT(*) as nombreFois

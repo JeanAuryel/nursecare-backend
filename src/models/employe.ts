@@ -43,24 +43,24 @@ export class Employe {
   static async create(employe: Omit<IEmploye, 'mdpEmploye'> & { mdpEmploye: string }): Promise<string> {
     // Hasher le mot de passe automatiquement
     const hashedPassword = await bcrypt.hash(employe.mdpEmploye, 10);
-    
-    const [result] = await pool.execute(
-      'INSERT INTO Employe (mailEmploye, mdpEmploye, prenomEmploye, nomEmploye, roleEmploye) VALUES (?, ?, ?, ?, ?)',
+
+    await pool.query(
+      'INSERT INTO Employe (mailEmploye, mdpEmploye, prenomEmploye, nomEmploye, roleEmploye) VALUES ($1, $2, $3, $4, $5)',
       [employe.mailEmploye, hashedPassword, employe.prenomEmploye, employe.nomEmploye, employe.roleEmploye]
     );
-    
+
     return employe.mailEmploye;
   }
 
   static async findByEmail(email: string): Promise<IEmploye | null> {
-  const [rows]: any = await pool.execute(
-    'SELECT * FROM Employe WHERE mailEmploye = ?',
+  const result = await pool.query(
+    'SELECT * FROM Employe WHERE mailEmploye = $1',
     [email]
   );
 
-  if (!rows.length) return null;
+  if (!result.rows.length) return null;
 
-  const employe = rows[0] as IEmploye;
+  const employe = result.rows[0] as IEmploye;
   employe.roleEmploye = employe.roleEmploye as RoleEmploye;
   return employe;
 }
@@ -68,58 +68,59 @@ export class Employe {
   static async update(email: string, employe: Partial<IEmploye>): Promise<boolean> {
     let query = 'UPDATE Employe SET ';
     const params: any[] = [];
-    
+    let paramIndex = 1;
+
     if (employe.prenomEmploye) {
-      query += 'prenomEmploye = ?, ';
+      query += `prenomEmploye = $${paramIndex++}, `;
       params.push(employe.prenomEmploye);
     }
-    
+
     if (employe.nomEmploye) {
-      query += 'nomEmploye = ?, ';
+      query += `nomEmploye = $${paramIndex++}, `;
       params.push(employe.nomEmploye);
     }
-    
+
     if (employe.mdpEmploye) {
-      query += 'mdpEmploye = ?, ';
+      query += `mdpEmploye = $${paramIndex++}, `;
       // Hasher le nouveau mot de passe automatiquement
       const hashedPassword = await this.hashPasswordIfNeeded(employe.mdpEmploye);
       params.push(hashedPassword);
     }
-    
+
     // Enlever la virgule et l'espace à la fin
     query = query.slice(0, -2);
-    
-    query += ' WHERE mailEmploye = ?';
+
+    query += ` WHERE mailEmploye = $${paramIndex}`;
     params.push(email);
-    
-    const [result]: any = await pool.execute(query, params);
-    
-    return result.affectedRows > 0;
+
+    const result = await pool.query(query, params);
+
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
   static async getAll(): Promise<IEmploye[]> {
-    const [rows]: any = await pool.execute('SELECT * FROM Employe');
-    return rows;
+    const result = await pool.query('SELECT * FROM Employe');
+    return result.rows;
   }
 
   static async verifyPassword(email: string, password: string): Promise<boolean> {
     const employe = await this.findByEmail(email);
-    
+
     if (!employe) {
       console.log(`❌ Utilisateur non trouvé: ${email}`);
       return false;
     }
-    
+
     // Si le mot de passe en base n'est pas haché, le hasher maintenant
     if (!this.isPasswordHashed(employe.mdpEmploye)) {
       console.log(`🔄 Migration du mot de passe pour: ${email}`);
-      
+
       // Vérifier d'abord si le mot de passe en clair correspond
       if (employe.mdpEmploye === password) {
         // Hasher et mettre à jour
         const hashedPassword = await bcrypt.hash(password, 10);
-        await pool.execute(
-          'UPDATE Employe SET MDPEmploye = ? WHERE mailEmploye = ?',
+        await pool.query(
+          'UPDATE Employe SET mdpEmploye = $1 WHERE mailEmploye = $2',
           [hashedPassword, email]
         );
         console.log(`✅ Mot de passe migré pour: ${email}`);
@@ -129,7 +130,7 @@ export class Employe {
         return false;
       }
     }
-    
+
     // Vérification normale avec bcrypt
     const isValid = await bcrypt.compare(password, employe.mdpEmploye);
     console.log(`🔐 Vérification pour ${email}: ${isValid ? '✅ OK' : '❌ KO'}`);

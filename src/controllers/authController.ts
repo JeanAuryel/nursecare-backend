@@ -13,17 +13,16 @@ export async function login(req: Request, res: Response) {
       return res.status(400).json({ message: "Email et mot de passe requis." });
     }
 
-    const [rows] = await pool.execute(
-      "SELECT * FROM Employe WHERE mailEmploye = ?",
+    const result = await pool.query(
+      "SELECT * FROM Employe WHERE mailEmploye = $1",
       [mailEmploye]
     );
 
-    const employes = rows as IEmploye[];
-    if (employes.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ message: "Identifiants invalides." });
     }
 
-    const employe = employes[0];
+    const employe = result.rows[0] as IEmploye;
 
     // Utiliser la méthode verifyPassword qui gère les mots de passe en clair et les hache automatiquement
     const passwordMatch = await Employe.verifyPassword(mailEmploye, mdpEmploye);
