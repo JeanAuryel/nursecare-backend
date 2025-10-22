@@ -28,8 +28,8 @@ class Facture {
      */
     static async genererNumeroFacture() {
         const annee = new Date().getFullYear();
-        const [rows] = await dbconfig_1.default.execute("SELECT COUNT(*) as count FROM Facture WHERE YEAR(dateFacture) = ?", [annee]);
-        const count = rows[0].count + 1;
+        const result = await dbconfig_1.default.query("SELECT COUNT(*) as count FROM Facture WHERE EXTRACT(YEAR FROM dateFacture) = ?", [annee]);
+        const count = result.rows[0].count + 1;
         return `FAC-${annee}-${String(count).padStart(5, '0')}`;
     }
     /**
@@ -37,7 +37,7 @@ class Facture {
      */
     static async create(facture) {
         const numeroFacture = await this.genererNumeroFacture();
-        const [result] = await dbconfig_1.default.execute(`INSERT INTO Facture (
+        const result = await dbconfig_1.default.query(`INSERT INTO Facture (
         numeroFacture, idPatient, dateFacture, dateEcheance,
         montantHT, montantTVA, montantTTC, montantPaye,
         statutFacture, modePaiement, datePaiement, notes
@@ -55,13 +55,13 @@ class Facture {
             facture.datePaiement || null,
             facture.notes || null
         ]);
-        return result.insertId;
+        return result.rows[0].idfacture;
     }
     /**
      * Ajouter une ligne de facture
      */
     static async ajouterLigne(ligne) {
-        const [result] = await dbconfig_1.default.execute(`INSERT INTO LigneFacture (
+        const result = await dbconfig_1.default.query(`INSERT INTO LigneFacture (
         idFacture, idPrestation, idRdv, description,
         quantite, prixUnitaire, montantHT,
         tauxTVA, montantTVA, montantTTC
@@ -77,16 +77,16 @@ class Facture {
             ligne.montantTVA,
             ligne.montantTTC
         ]);
-        return result.insertId;
+        return result.rows[0].idfacture;
     }
     /**
      * Récupérer toutes les factures
      */
     static async getAll() {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
       SELECT
         f.*,
-        JSON_OBJECT(
+        json_build_object(
           'idPatient', p.idPatient,
           'nomPatient', p.nomPatient,
           'prenomPatient', p.prenomPatient,
@@ -99,7 +99,7 @@ class Facture {
       ORDER BY f.dateFacture DESC
     `);
         // Parse patient JSON and convert numeric fields
-        return rows.map((row) => ({
+        return result.rows.map((row) => ({
             ...row,
             patient: typeof row.patient === 'string' ? JSON.parse(row.patient) : row.patient,
             montantHT: parseFloat(row.montantHT) || 0,
@@ -112,10 +112,10 @@ class Facture {
      * Récupérer une facture par ID avec ses lignes
      */
     static async getById(idFacture) {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
       SELECT
         f.*,
-        JSON_OBJECT(
+        json_build_object(
           'idPatient', p.idPatient,
           'nomPatient', p.nomPatient,
           'prenomPatient', p.prenomPatient,
@@ -127,13 +127,13 @@ class Facture {
       LEFT JOIN Patient p ON f.idPatient = p.idPatient
       WHERE f.idFacture = ?
     `, [idFacture]);
-        if (rows.length === 0)
+        if (result.rows.length === 0)
             return null;
-        const facture = rows[0];
+        const facture = result.rows[0];
         // Parse patient JSON
         facture.patient = typeof facture.patient === 'string' ? JSON.parse(facture.patient) : facture.patient;
         // Récupérer les lignes
-        const [lignes] = await dbconfig_1.default.execute(`
+        const lignesResult = await dbconfig_1.default.query(`
       SELECT
         lf.*,
         pr.nomPrestation,
@@ -142,30 +142,30 @@ class Facture {
       LEFT JOIN Prestation pr ON lf.idPrestation = pr.idPrestation
       WHERE lf.idFacture = ?
     `, [idFacture]);
-        facture.lignes = lignes;
+        facture.lignes = lignesResult.rows;
         return facture;
     }
     /**
      * Mettre à jour le statut d'une facture
      */
     static async updateStatut(idFacture, statutFacture, montantPaye, modePaiement, datePaiement) {
-        const [result] = await dbconfig_1.default.execute(`UPDATE Facture
+        const result = await dbconfig_1.default.query(`UPDATE Facture
        SET statutFacture = ?,
            montantPaye = COALESCE(?, montantPaye),
            modePaiement = COALESCE(?, modePaiement),
            datePaiement = COALESCE(?, datePaiement),
-           updatedAt = NOW()
+           updatedAt = CURRENT_TIMESTAMP
        WHERE idFacture = ?`, [statutFacture, montantPaye, modePaiement, datePaiement, idFacture]);
-        return result.affectedRows > 0;
+        return result.rowCount !== null && result.rowCount > 0;
     }
     /**
      * Récupérer les factures par statut
      */
     static async getByStatut(statutFacture) {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
       SELECT
         f.*,
-        JSON_OBJECT(
+        json_build_object(
           'idPatient', p.idPatient,
           'nomPatient', p.nomPatient,
           'prenomPatient', p.prenomPatient,
@@ -179,7 +179,7 @@ class Facture {
       ORDER BY f.dateFacture DESC
     `, [statutFacture]);
         // Parse patient JSON and convert numeric fields
-        return rows.map((row) => ({
+        return result.rows.map((row) => ({
             ...row,
             patient: typeof row.patient === 'string' ? JSON.parse(row.patient) : row.patient,
             montantHT: parseFloat(row.montantHT) || 0,
@@ -192,10 +192,10 @@ class Facture {
      * Récupérer les factures d'un patient
      */
     static async getByPatient(idPatient) {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
       SELECT
         f.*,
-        JSON_OBJECT(
+        json_build_object(
           'idPatient', p.idPatient,
           'nomPatient', p.nomPatient,
           'prenomPatient', p.prenomPatient,
@@ -209,7 +209,7 @@ class Facture {
       ORDER BY f.dateFacture DESC
     `, [idPatient]);
         // Parse patient JSON and convert numeric fields
-        return rows.map((row) => ({
+        return result.rows.map((row) => ({
             ...row,
             patient: typeof row.patient === 'string' ? JSON.parse(row.patient) : row.patient,
             montantHT: parseFloat(row.montantHT) || 0,
@@ -223,10 +223,10 @@ class Facture {
      */
     static async delete(idFacture) {
         // Supprimer d'abord les lignes
-        await dbconfig_1.default.execute("DELETE FROM LigneFacture WHERE idFacture = ?", [idFacture]);
+        await dbconfig_1.default.query("DELETE FROM LigneFacture WHERE idFacture = ?", [idFacture]);
         // Puis la facture
-        const [result] = await dbconfig_1.default.execute("DELETE FROM Facture WHERE idFacture = ?", [idFacture]);
-        return result.affectedRows > 0;
+        const result = await dbconfig_1.default.query("DELETE FROM Facture WHERE idFacture = ?", [idFacture]);
+        return result.rowCount !== null && result.rowCount > 0;
     }
 }
 exports.Facture = Facture;

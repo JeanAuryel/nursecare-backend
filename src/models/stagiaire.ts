@@ -106,37 +106,38 @@ export class Stagiaire {
     static async update(idStagiaire: number, stagiaire: Partial<IStagiaire>): Promise<number> {
         const fields: string[] = [];
         const values: any[] = [];
+        let paramIndex = 1;
 
         if (stagiaire.nomStagiaire !== undefined) {
-            fields.push('nomStagiaire = $1'));
+            fields.push(`nomStagiaire = $${paramIndex++}`);
             values.push(stagiaire.nomStagiaire);
         }
         if (stagiaire.prenomStagiaire !== undefined) {
-            fields.push('prenomStagiaire = ?');
+            fields.push(`prenomStagiaire = $${paramIndex++}`);
             values.push(stagiaire.prenomStagiaire);
         }
         if (stagiaire.idEcole !== undefined) {
-            fields.push('idEcole = ?');
+            fields.push(`idEcole = $${paramIndex++}`);
             values.push(stagiaire.idEcole);
         }
         if (stagiaire.idTuteur !== undefined) {
-            fields.push('idTuteur = ?');
+            fields.push(`idTuteur = $${paramIndex++}`);
             values.push(stagiaire.idTuteur);
         }
         if (stagiaire.mailStagiaire !== undefined) {
-            fields.push('mailStagiaire = ?');
+            fields.push(`mailStagiaire = $${paramIndex++}`);
             values.push(stagiaire.mailStagiaire);
         }
         if (stagiaire.numStagiaire !== undefined) {
-            fields.push('numStagiaire = ?');
+            fields.push(`numStagiaire = $${paramIndex++}`);
             values.push(stagiaire.numStagiaire);
         }
         if (stagiaire.dateDebutStage !== undefined) {
-            fields.push('dateDebutStage = ?');
+            fields.push(`dateDebutStage = $${paramIndex++}`);
             values.push(stagiaire.dateDebutStage);
         }
         if (stagiaire.dateFinStage !== undefined) {
-            fields.push('dateFinStage = ?');
+            fields.push(`dateFinStage = $${paramIndex++}`);
             values.push(stagiaire.dateFinStage);
         }
 
@@ -145,7 +146,7 @@ export class Stagiaire {
         values.push(idStagiaire);
 
         const result = await pool.query(
-            `UPDATE Stagiaire SET ${fields.join(', ')} WHERE idStagiaire = $1`,
+            `UPDATE Stagiaire SET ${fields.join(', ')} WHERE idStagiaire = $${paramIndex}`,
             values
         );
         return result.rowCount || 0;

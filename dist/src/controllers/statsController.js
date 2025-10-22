@@ -27,23 +27,23 @@ const dbconfig_1 = __importDefault(require("../config/dbconfig"));
 async function getDashboardStats(req, res) {
     try {
         // Nombre total d'employés
-        const [employeCount] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM Employe');
+        const [employeCount] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM Employe');
         // Nombre total de patients
-        const [patientCount] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM Patient');
+        const [patientCount] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM Patient');
         // Nombre total de prestations réalisées
-        const [prestationsRealisees] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NOT NULL');
+        const [prestationsRealisees] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NOT NULL');
         // Nombre de RDV prévus (à venir)
-        const [rdvPrevus] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu > NOW()');
+        const [rdvPrevus] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu > NOW()');
         // Chiffre d'affaires total (factures payées)
-        const [caTotal] = await dbconfig_1.default.execute(`SELECT COALESCE(SUM(montantTTC), 0) as total
+        const [caTotal] = await dbconfig_1.default.query(`SELECT COALESCE(SUM(montantTTC), 0) as total
        FROM Facture
        WHERE statutFacture IN ('PAYEE', 'PARTIELLE')`);
         // Chiffre d'affaires en attente (factures envoyées non payées)
-        const [caEnAttente] = await dbconfig_1.default.execute(`SELECT COALESCE(SUM(montantTTC - COALESCE(montantPaye, 0)), 0) as total
+        const [caEnAttente] = await dbconfig_1.default.query(`SELECT COALESCE(SUM(montantTTC - COALESCE(montantPaye, 0)), 0) as total
        FROM Facture
        WHERE statutFacture IN ('ENVOYEE', 'PARTIELLE', 'IMPAYEE')`);
         // Nombre de factures impayées
-        const [facturesImpayees] = await dbconfig_1.default.execute(`SELECT COUNT(*) as count FROM Facture WHERE statutFacture = 'IMPAYEE'`);
+        const [facturesImpayees] = await dbconfig_1.default.query(`SELECT COUNT(*) as count FROM Facture WHERE statutFacture = 'IMPAYEE'`);
         res.status(200).json({
             employes: employeCount[0].total,
             patients: patientCount[0].total,
@@ -66,7 +66,7 @@ async function getDashboardStats(req, res) {
 async function getFinancierGlobal(req, res) {
     try {
         // Chiffre d'affaires total par statut
-        const [caParStatut] = await dbconfig_1.default.execute(`SELECT
+        const [caParStatut] = await dbconfig_1.default.query(`SELECT
         statutFacture,
         COUNT(*) as nombreFactures,
         COALESCE(SUM(montantTTC), 0) as montantTotal,
@@ -74,7 +74,7 @@ async function getFinancierGlobal(req, res) {
        FROM Facture
        GROUP BY statutFacture`);
         // Chiffre d'affaires par mode de paiement
-        const [caParModePaiement] = await dbconfig_1.default.execute(`SELECT
+        const [caParModePaiement] = await dbconfig_1.default.query(`SELECT
         modePaiement,
         COUNT(*) as nombreFactures,
         COALESCE(SUM(montantTTC), 0) as montantTotal
@@ -82,13 +82,13 @@ async function getFinancierGlobal(req, res) {
        WHERE statutFacture IN ('PAYEE', 'PARTIELLE')
        GROUP BY modePaiement`);
         // Montant moyen des factures
-        const [montantMoyen] = await dbconfig_1.default.execute(`SELECT
+        const [montantMoyen] = await dbconfig_1.default.query(`SELECT
         AVG(montantTTC) as montantMoyen,
         MIN(montantTTC) as montantMin,
         MAX(montantTTC) as montantMax
        FROM Facture`);
         // Taux de recouvrement
-        const [tauxRecouvrement] = await dbconfig_1.default.execute(`SELECT
+        const [tauxRecouvrement] = await dbconfig_1.default.query(`SELECT
         COALESCE(SUM(CASE WHEN statutFacture IN ('PAYEE', 'PARTIELLE') THEN montantPaye ELSE 0 END), 0) as montantRecouvre,
         COALESCE(SUM(montantTTC), 0) as montantTotal
        FROM Facture
@@ -122,7 +122,7 @@ async function getFinancierGlobal(req, res) {
 async function getCAMensuel(req, res) {
     try {
         const annee = req.query.annee || new Date().getFullYear();
-        const [caMensuel] = await dbconfig_1.default.execute(`SELECT
+        const [caMensuel] = await dbconfig_1.default.query(`SELECT
         MONTH(dateFacture) as mois,
         MONTHNAME(dateFacture) as nomMois,
         COUNT(*) as nombreFactures,
@@ -145,7 +145,7 @@ async function getCAMensuel(req, res) {
  */
 async function getCAParEmploye(req, res) {
     try {
-        const [caParEmploye] = await dbconfig_1.default.execute(`SELECT
+        const [caParEmploye] = await dbconfig_1.default.query(`SELECT
         e.idEmploye,
         e.nomEmploye,
         e.prenomEmploye,
@@ -175,13 +175,13 @@ async function getCAParEmploye(req, res) {
 async function getRDVGlobal(req, res) {
     try {
         // Nombre total de RDV
-        const [totalRdv] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM RDV');
+        const [totalRdv] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM RDV');
         // RDV réalisés
-        const [rdvRealises] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NOT NULL');
+        const [rdvRealises] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NOT NULL');
         // RDV prévus (à venir)
-        const [rdvPrevus] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu > NOW()');
+        const [rdvPrevus] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu > NOW()');
         // RDV manqués (prévus dans le passé mais non réalisés)
-        const [rdvManques] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu < NOW()');
+        const [rdvManques] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM RDV WHERE timestamp_RDV_reel IS NULL AND timestamp_RDV_prevu < NOW()');
         // Taux de réalisation
         const tauxRealisation = totalRdv[0].total > 0
             ? ((rdvRealises[0].total / totalRdv[0].total) * 100).toFixed(2)
@@ -208,7 +208,7 @@ async function getRDVParJour(req, res) {
         if (!debut || !fin) {
             return res.status(400).json({ message: 'Les paramètres debut et fin sont requis' });
         }
-        const [rdvParJour] = await dbconfig_1.default.execute(`SELECT
+        const [rdvParJour] = await dbconfig_1.default.query(`SELECT
         DATE(timestamp_RDV_reel) as jour,
         COUNT(*) as nombreRDV,
         COUNT(DISTINCT idPatient) as nombrePatients,
@@ -231,7 +231,7 @@ async function getRDVParJour(req, res) {
 async function getRDVParMois(req, res) {
     try {
         const annee = req.query.annee || new Date().getFullYear();
-        const [rdvParMois] = await dbconfig_1.default.execute(`SELECT
+        const [rdvParMois] = await dbconfig_1.default.query(`SELECT
         MONTH(timestamp_RDV_reel) as mois,
         MONTHNAME(timestamp_RDV_reel) as nomMois,
         COUNT(*) as nombreRDV,
@@ -268,14 +268,14 @@ async function getRDVParEmploye(req, res) {
     `;
         const params = [];
         if (debut && fin) {
-            query += ` AND DATE(r.timestamp_RDV_reel) BETWEEN ? AND ?`;
+            query += ` AND DATE(r.timestamp_RDV_reel) BETWEEN $1 AND $2`;
             params.push(debut, fin);
         }
         query += `
       GROUP BY e.idEmploye, e.nomEmploye, e.prenomEmploye, e.roleEmploye
       ORDER BY nombreRDV DESC
     `;
-        const [rdvParEmploye] = await dbconfig_1.default.execute(query, params);
+        const [rdvParEmploye] = await dbconfig_1.default.query(query, params);
         res.status(200).json(rdvParEmploye);
     }
     catch (error) {
@@ -294,7 +294,7 @@ async function getRDVEmployeParJour(req, res) {
         if (!debut || !fin) {
             return res.status(400).json({ message: 'Les paramètres debut et fin sont requis' });
         }
-        const [rdvParJour] = await dbconfig_1.default.execute(`SELECT
+        const [rdvParJour] = await dbconfig_1.default.query(`SELECT
         DATE(timestamp_RDV_reel) as jour,
         COUNT(*) as nombreRDV,
         COUNT(DISTINCT idPatient) as nombrePatients
@@ -318,16 +318,16 @@ async function getRDVEmployeParJour(req, res) {
 async function getPatientsGlobal(req, res) {
     try {
         // Nombre total de patients
-        const [totalPatients] = await dbconfig_1.default.execute('SELECT COUNT(*) as total FROM Patient');
+        const [totalPatients] = await dbconfig_1.default.query('SELECT COUNT(*) as total FROM Patient');
         // Patients actifs (ayant eu au moins un RDV dans les 6 derniers mois)
-        const [patientsActifs] = await dbconfig_1.default.execute(`SELECT COUNT(DISTINCT idPatient) as total
+        const [patientsActifs] = await dbconfig_1.default.query(`SELECT COUNT(DISTINCT idPatient) as total
        FROM RDV
        WHERE timestamp_RDV_reel IS NOT NULL
        AND timestamp_RDV_reel >= DATE_SUB(NOW(), INTERVAL 6 MONTH)`);
         // Patients inactifs
         const patientsInactifs = totalPatients[0].total - patientsActifs[0].total;
         // Patient le plus récent
-        const [dernierPatient] = await dbconfig_1.default.execute(`SELECT idPatient, nomPatient, prenomPatient, createdAt
+        const [dernierPatient] = await dbconfig_1.default.query(`SELECT idPatient, nomPatient, prenomPatient, createdAt
        FROM Patient
        ORDER BY createdAt DESC
        LIMIT 1`);
@@ -349,7 +349,7 @@ async function getPatientsGlobal(req, res) {
 async function getNouveauxPatientsParMois(req, res) {
     try {
         const annee = req.query.annee || new Date().getFullYear();
-        const [nouveauxPatients] = await dbconfig_1.default.execute(`SELECT
+        const [nouveauxPatients] = await dbconfig_1.default.query(`SELECT
         MONTH(createdAt) as mois,
         MONTHNAME(createdAt) as nomMois,
         COUNT(*) as nombreNouveauxPatients
@@ -371,7 +371,7 @@ async function getTopPatients(req, res) {
     try {
         const limit = parseInt(req.query.limit) || 10;
         // Récupérer les derniers patients avec RDV réalisés
-        const [patients] = await dbconfig_1.default.execute(`SELECT DISTINCT
+        const [patients] = await dbconfig_1.default.query(`SELECT DISTINCT
         p.idPatient,
         p.nomPatient,
         p.prenomPatient,
@@ -386,7 +386,7 @@ async function getTopPatients(req, res) {
         // Pour chaque patient, récupérer les détails des prestations et factures
         const patientsWithDetails = await Promise.all(patients.map(async (patient) => {
             // Prestations réalisées
-            const [prestations] = await dbconfig_1.default.execute(`SELECT
+            const [prestations] = await dbconfig_1.default.query(`SELECT
             pr.nomPrestation,
             pr.prix_TTC,
             COUNT(r.idRdv) as nombre_fois,
@@ -396,14 +396,14 @@ async function getTopPatients(req, res) {
            WHERE r.idPatient = ? AND r.timestamp_RDV_reel IS NOT NULL
            GROUP BY pr.idPrestation, pr.nomPrestation, pr.prix_TTC`, [patient.idPatient]);
             // Total facturé
-            const [factureTotal] = await dbconfig_1.default.execute(`SELECT
+            const [factureTotal] = await dbconfig_1.default.query(`SELECT
             COUNT(*) as nombre_factures,
             COALESCE(SUM(montantTTC), 0) as montant_total_facture,
             COALESCE(SUM(montantPaye), 0) as montant_paye
            FROM Facture
            WHERE idPatient = ?`, [patient.idPatient]);
             // Nombre total de RDV
-            const [rdvCount] = await dbconfig_1.default.execute(`SELECT COUNT(*) as nombre_rdv
+            const [rdvCount] = await dbconfig_1.default.query(`SELECT COUNT(*) as nombre_rdv
            FROM RDV
            WHERE idPatient = ? AND timestamp_RDV_reel IS NOT NULL`, [patient.idPatient]);
             return {
@@ -429,7 +429,7 @@ async function getTopPatients(req, res) {
 async function getPrestationsPopulaires(req, res) {
     try {
         const limit = parseInt(req.query.limit) || 10;
-        const [prestations] = await dbconfig_1.default.execute(`SELECT
+        const [prestations] = await dbconfig_1.default.query(`SELECT
         pr.idPrestation,
         pr.nomPrestation,
         pr.prix_TTC,
@@ -453,7 +453,7 @@ async function getPrestationsPopulaires(req, res) {
  */
 async function getPerformanceEmployes(req, res) {
     try {
-        const [performance] = await dbconfig_1.default.execute(`SELECT
+        const [performance] = await dbconfig_1.default.query(`SELECT
         e.idEmploye,
         e.nomEmploye,
         e.prenomEmploye,
@@ -483,12 +483,12 @@ async function getStatsEmployeDetaille(req, res) {
     try {
         const { id } = req.params;
         // Informations de l'employé
-        const [employe] = await dbconfig_1.default.execute('SELECT idEmploye, nomEmploye, prenomEmploye, mailEmploye, roleEmploye FROM Employe WHERE idEmploye = ?', [id]);
+        const [employe] = await dbconfig_1.default.query('SELECT idEmploye, nomEmploye, prenomEmploye, mailEmploye, roleEmploye FROM Employe WHERE idEmploye = ?', [id]);
         if (!employe || employe.length === 0) {
             return res.status(404).json({ message: 'Employé non trouvé' });
         }
         // Statistiques générales
-        const [stats] = await dbconfig_1.default.execute(`SELECT
+        const [stats] = await dbconfig_1.default.query(`SELECT
         COUNT(DISTINCT r.idRdv) as totalPrestations,
         COUNT(DISTINCT r.idPatient) as totalPatients,
         COUNT(DISTINCT DATE(r.timestamp_RDV_reel)) as joursActifs,
@@ -496,7 +496,7 @@ async function getStatsEmployeDetaille(req, res) {
        FROM RDV r
        WHERE r.idEmploye = ? AND r.timestamp_RDV_reel IS NOT NULL`, [id]);
         // Prestations par mois (12 derniers mois)
-        const [prestationsParMois] = await dbconfig_1.default.execute(`SELECT
+        const [prestationsParMois] = await dbconfig_1.default.query(`SELECT
         DATE_FORMAT(timestamp_RDV_reel, '%Y-%m') as mois,
         COUNT(*) as nombrePrestations
        FROM RDV
@@ -506,7 +506,7 @@ async function getStatsEmployeDetaille(req, res) {
        GROUP BY DATE_FORMAT(timestamp_RDV_reel, '%Y-%m')
        ORDER BY mois`, [id]);
         // Top prestations réalisées
-        const [topPrestations] = await dbconfig_1.default.execute(`SELECT
+        const [topPrestations] = await dbconfig_1.default.query(`SELECT
         pr.nomPrestation,
         COUNT(*) as nombreFois
        FROM RDV r

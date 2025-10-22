@@ -23,31 +23,31 @@ const facture_1 = require("../models/facture");
 async function getDashboardSecretariat(req, res) {
     try {
         // RDV du jour
-        const [rdvDuJour] = await dbconfig_1.default.execute(`SELECT COUNT(*) as total
+        const [rdvDuJour] = await dbconfig_1.default.query(`SELECT COUNT(*) as total
        FROM RDV
        WHERE DATE(timestamp_RDV_prevu) = CURDATE()
        AND timestamp_RDV_reel IS NULL`);
         // RDV de demain (pour rappels)
-        const [rdvDemain] = await dbconfig_1.default.execute(`SELECT COUNT(*) as total
+        const [rdvDemain] = await dbconfig_1.default.query(`SELECT COUNT(*) as total
        FROM RDV
        WHERE DATE(timestamp_RDV_prevu) = DATE_ADD(CURDATE(), INTERVAL 1 DAY)
        AND timestamp_RDV_reel IS NULL`);
         // Factures en attente de paiement
-        const [facturesEnAttente] = await dbconfig_1.default.execute(`SELECT COUNT(*) as total, COALESCE(SUM(montantTTC - COALESCE(montantPaye, 0)), 0) as montantTotal
+        const [facturesEnAttente] = await dbconfig_1.default.query(`SELECT COUNT(*) as total, COALESCE(SUM(montantTTC - COALESCE(montantPaye, 0)), 0) as montantTotal
        FROM Facture
        WHERE statutFacture IN ('ENVOYEE', 'PARTIELLE', 'IMPAYEE')`);
         // Factures impayées (en retard)
-        const [facturesEnRetard] = await dbconfig_1.default.execute(`SELECT COUNT(*) as total, COALESCE(SUM(montantTTC), 0) as montantTotal
+        const [facturesEnRetard] = await dbconfig_1.default.query(`SELECT COUNT(*) as total, COALESCE(SUM(montantTTC), 0) as montantTotal
        FROM Facture
        WHERE statutFacture = 'IMPAYEE'
        AND dateEcheance < CURDATE()`);
         // Prestations à facturer
-        const [prestationsAFacturer] = await dbconfig_1.default.execute(`SELECT COUNT(*) as total
+        const [prestationsAFacturer] = await dbconfig_1.default.query(`SELECT COUNT(*) as total
        FROM RDV
        WHERE timestamp_RDV_reel IS NOT NULL
        AND timestamp_RDV_facture IS NULL`);
         // Patients vus cette semaine
-        const [patientsSemaine] = await dbconfig_1.default.execute(`SELECT COUNT(DISTINCT idPatient) as total
+        const [patientsSemaine] = await dbconfig_1.default.query(`SELECT COUNT(DISTINCT idPatient) as total
        FROM RDV
        WHERE timestamp_RDV_reel IS NOT NULL
        AND YEARWEEK(timestamp_RDV_reel, 1) = YEARWEEK(CURDATE(), 1)`);
@@ -78,7 +78,7 @@ async function getDashboardSecretariat(req, res) {
 async function getRDVDuJour(req, res) {
     try {
         const date = req.query.date || new Date().toISOString().split('T')[0];
-        const [rdv] = await dbconfig_1.default.execute(`SELECT
+        const [rdv] = await dbconfig_1.default.query(`SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
         r.timestamp_RDV_reel,
@@ -113,7 +113,7 @@ async function getRDVDuJour(req, res) {
 async function getRDVDeLaSemaine(req, res) {
     try {
         const date = req.query.date || new Date().toISOString().split('T')[0];
-        const [rdv] = await dbconfig_1.default.execute(`SELECT
+        const [rdv] = await dbconfig_1.default.query(`SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
         r.timestamp_RDV_reel,
@@ -145,7 +145,7 @@ async function getRDVEmployeDuJour(req, res) {
     try {
         const { id } = req.params;
         const date = req.query.date || new Date().toISOString().split('T')[0];
-        const [rdv] = await dbconfig_1.default.execute(`SELECT
+        const [rdv] = await dbconfig_1.default.query(`SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
         r.timestamp_RDV_reel,
@@ -185,11 +185,11 @@ async function getDisponibilites(req, res) {
     `;
         const params = [date];
         if (idEmploye) {
-            query += ` AND idEmploye = ?`;
+            query += ` AND idEmploye = $1`;
             params.push(idEmploye);
         }
         query += ` ORDER BY timestamp_RDV_prevu`;
-        const [rdvExistants] = await dbconfig_1.default.execute(query, params);
+        const [rdvExistants] = await dbconfig_1.default.query(query, params);
         // Générer les créneaux de 8h à 18h par tranches de 30 minutes
         const creneaux = [];
         const dateStr = date;
@@ -223,7 +223,7 @@ async function getDisponibilites(req, res) {
  */
 async function getRDVARappeler(req, res) {
     try {
-        const [rdv] = await dbconfig_1.default.execute(`SELECT
+        const [rdv] = await dbconfig_1.default.query(`SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
         p.idPatient,
@@ -260,7 +260,7 @@ async function enregistrerPaiement(req, res) {
             return res.status(400).json({ message: 'Montant et mode de paiement requis' });
         }
         // Récupérer la facture
-        const [factures] = await dbconfig_1.default.execute('SELECT * FROM Facture WHERE idFacture = ?', [idFacture]);
+        const [factures] = await dbconfig_1.default.query('SELECT * FROM Facture WHERE idFacture = ?', [idFacture]);
         if (factures.length === 0) {
             return res.status(404).json({ message: 'Facture non trouvée' });
         }
@@ -280,7 +280,7 @@ async function enregistrerPaiement(req, res) {
             nouveauStatut = facture.statutFacture;
         }
         // Mettre à jour la facture
-        await dbconfig_1.default.execute(`UPDATE Facture
+        await dbconfig_1.default.query(`UPDATE Facture
        SET montantPaye = ?,
            statutFacture = ?,
            modePaiement = ?,
@@ -303,7 +303,7 @@ async function enregistrerPaiement(req, res) {
  */
 async function getFacturesEnAttente(req, res) {
     try {
-        const [factures] = await dbconfig_1.default.execute(`SELECT
+        const [factures] = await dbconfig_1.default.query(`SELECT
         f.idFacture,
         f.numeroFacture,
         f.dateFacture,
@@ -334,7 +334,7 @@ async function getFacturesEnAttente(req, res) {
  */
 async function getFacturesEnRetard(req, res) {
     try {
-        const [factures] = await dbconfig_1.default.execute(`SELECT
+        const [factures] = await dbconfig_1.default.query(`SELECT
         f.idFacture,
         f.numeroFacture,
         f.dateFacture,
@@ -368,12 +368,12 @@ async function getHistoriquePatient(req, res) {
     try {
         const { id } = req.params;
         // Informations du patient
-        const [patient] = await dbconfig_1.default.execute('SELECT * FROM Patient WHERE idPatient = ?', [id]);
+        const [patient] = await dbconfig_1.default.query('SELECT * FROM Patient WHERE idPatient = ?', [id]);
         if (patient.length === 0) {
             return res.status(404).json({ message: 'Patient non trouvé' });
         }
         // Historique des RDV
-        const [rdv] = await dbconfig_1.default.execute(`SELECT
+        const [rdv] = await dbconfig_1.default.query(`SELECT
         r.idRdv,
         r.timestamp_RDV_prevu,
         r.timestamp_RDV_reel,
@@ -392,7 +392,7 @@ async function getHistoriquePatient(req, res) {
        WHERE r.idPatient = ?
        ORDER BY r.timestamp_RDV_prevu DESC`, [id]);
         // Historique des factures
-        const [factures] = await dbconfig_1.default.execute(`SELECT
+        const [factures] = await dbconfig_1.default.query(`SELECT
         f.idFacture,
         f.numeroFacture,
         f.dateFacture,
@@ -406,7 +406,7 @@ async function getHistoriquePatient(req, res) {
        WHERE f.idPatient = ?
        ORDER BY f.dateFacture DESC`, [id]);
         // Statistiques
-        const [stats] = await dbconfig_1.default.execute(`SELECT
+        const [stats] = await dbconfig_1.default.query(`SELECT
         COUNT(DISTINCT r.idRdv) as nombreRDV,
         COUNT(DISTINCT CASE WHEN r.timestamp_RDV_reel IS NOT NULL THEN r.idRdv END) as nombreRDVRealises,
         COUNT(DISTINCT f.idFacture) as nombreFactures,
@@ -433,7 +433,7 @@ async function getHistoriquePatient(req, res) {
 async function getFacturesImpayeesPatient(req, res) {
     try {
         const { id } = req.params;
-        const [factures] = await dbconfig_1.default.execute(`SELECT
+        const [factures] = await dbconfig_1.default.query(`SELECT
         f.idFacture,
         f.numeroFacture,
         f.dateFacture,

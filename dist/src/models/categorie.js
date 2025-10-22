@@ -7,24 +7,24 @@ exports.Categorie = void 0;
 const dbconfig_1 = __importDefault(require("../config/dbconfig"));
 class Categorie {
     static async create(categorie) {
-        const [result] = await dbconfig_1.default.execute(`INSERT INTO Categorie (nomCategorie) VALUES (?)`, [categorie.nomCategorie]);
-        return result.insertId;
+        const result = await dbconfig_1.default.query(`INSERT INTO Categorie (nomCategorie) VALUES ($1) RETURNING idCategorie`, [categorie.nomCategorie]);
+        return result.rows[0].idcategorie;
     }
     static async findAll() {
-        const [rows] = await dbconfig_1.default.execute(`SELECT * FROM Categorie`);
-        return rows;
+        const result = await dbconfig_1.default.query(`SELECT * FROM Categorie`);
+        return result.rows;
     }
     static async findById(idCategorie) {
-        const [rows] = await dbconfig_1.default.execute(`SELECT * FROM Categorie WHERE idCategorie = ?`, [idCategorie]);
-        return rows.length ? rows[0] : null;
+        const result = await dbconfig_1.default.query(`SELECT * FROM Categorie WHERE idCategorie = $1`, [idCategorie]);
+        return result.rows.length ? result.rows[0] : null;
     }
     static async update(categorie) {
-        const [result] = await dbconfig_1.default.execute(`UPDATE Categorie SET nomCategorie = ? WHERE idCategorie = ?`, [categorie.nomCategorie, categorie.idCategorie]);
-        return result.affectedRows;
+        const result = await dbconfig_1.default.query(`UPDATE Categorie SET nomCategorie = $1 WHERE idCategorie = $2`, [categorie.nomCategorie, categorie.idCategorie]);
+        return result.rowCount || 0;
     }
     static async delete(idCategorie) {
-        const [result] = await dbconfig_1.default.execute(`DELETE FROM Categorie WHERE idCategorie = ?`, [idCategorie]);
-        return result.affectedRows;
+        const result = await dbconfig_1.default.query(`DELETE FROM Categorie WHERE idCategorie = $1`, [idCategorie]);
+        return result.rowCount || 0;
     }
 }
 exports.Categorie = Categorie;

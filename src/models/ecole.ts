@@ -58,7 +58,7 @@ export class Ecole {
       ecole.stagiaires = stagiairesResult.rows;
     }
 
-    return ecoles;
+    return ecolesResult.rows;
   }
 
   static async getOne(idEcole: number): Promise<IEcole | null> {

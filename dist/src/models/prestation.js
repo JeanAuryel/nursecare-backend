@@ -7,11 +7,11 @@ exports.Prestation = void 0;
 const dbconfig_1 = __importDefault(require("../config/dbconfig"));
 class Prestation {
     static async create(prestation) {
-        const [result] = await dbconfig_1.default.execute(`INSERT INTO Prestation (nomPrestation, prix_TTC, idCategorie) VALUES (?, ?, ?)`, [prestation.nomPrestation, prestation.prix_TTC, prestation.idCategorie]);
-        return result.insertId;
+        const result = await dbconfig_1.default.query(`INSERT INTO Prestation (nomPrestation, prix_TTC, idCategorie) VALUES ($1, $2, $3) RETURNING idPrestation`, [prestation.nomPrestation, prestation.prix_TTC, prestation.idCategorie]);
+        return result.rows[0].idprestation;
     }
     static async getAll() {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
             SELECT
                 p.idPrestation,
                 p.nomPrestation,
@@ -23,7 +23,7 @@ class Prestation {
             ORDER BY p.nomPrestation
         `);
         // Restructurer les données pour inclure l'objet categorie
-        return rows.map((row) => ({
+        return result.rows.map((row) => ({
             idPrestation: row.idPrestation,
             nomPrestation: row.nomPrestation,
             prix_TTC: row.prix_TTC,
@@ -35,7 +35,7 @@ class Prestation {
         }));
     }
     static async getOne(idPrestation) {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
             SELECT
                 p.idPrestation,
                 p.nomPrestation,
@@ -46,9 +46,9 @@ class Prestation {
             LEFT JOIN Categorie c ON p.idCategorie = c.idCategorie
             WHERE p.idPrestation = ?
         `, [idPrestation]);
-        if (rows.length === 0)
+        if (result.rows.length === 0)
             return null;
-        const row = rows[0];
+        const row = result.rows[0];
         return {
             idPrestation: row.idPrestation,
             nomPrestation: row.nomPrestation,
@@ -61,12 +61,12 @@ class Prestation {
         };
     }
     static async update(idPrestation, prestation) {
-        const [result] = await dbconfig_1.default.execute(`UPDATE Prestation SET nomPrestation = ?, prix_TTC = ?, idCategorie = ? WHERE idPrestation = ?`, [prestation.nomPrestation, prestation.prix_TTC, prestation.idCategorie, idPrestation]);
-        return result.affectedRows;
+        const result = await dbconfig_1.default.query(`UPDATE Prestation SET nomPrestation = $1, prix_TTC = $2, idCategorie = $3 WHERE idPrestation = $4`, [prestation.nomPrestation, prestation.prix_TTC, prestation.idCategorie, idPrestation]);
+        return result.rowCount || 0;
     }
     static async delete(idPrestation) {
-        const [result] = await dbconfig_1.default.execute(`DELETE FROM Prestation WHERE idPrestation = ?`, [idPrestation]);
-        return result.affectedRows;
+        const result = await dbconfig_1.default.query(`DELETE FROM Prestation WHERE idPrestation = $1`, [idPrestation]);
+        return result.rowCount || 0;
     }
 }
 exports.Prestation = Prestation;

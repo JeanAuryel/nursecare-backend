@@ -13,12 +13,11 @@ async function login(req, res) {
         if (!mailEmploye || !mdpEmploye) {
             return res.status(400).json({ message: "Email et mot de passe requis." });
         }
-        const [rows] = await dbconfig_1.default.execute("SELECT * FROM Employe WHERE mailEmploye = ?", [mailEmploye]);
-        const employes = rows;
-        if (employes.length === 0) {
+        const result = await dbconfig_1.default.query("SELECT * FROM Employe WHERE mailEmploye = $1", [mailEmploye]);
+        if (result.rows.length === 0) {
             return res.status(401).json({ message: "Identifiants invalides." });
         }
-        const employe = employes[0];
+        const employe = result.rows[0];
         // Utiliser la méthode verifyPassword qui gère les mots de passe en clair et les hache automatiquement
         const passwordMatch = await employe_1.Employe.verifyPassword(mailEmploye, mdpEmploye);
         if (!passwordMatch) {

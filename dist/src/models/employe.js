@@ -35,44 +35,45 @@ class Employe {
     static async create(employe) {
         // Hasher le mot de passe automatiquement
         const hashedPassword = await bcrypt_1.default.hash(employe.mdpEmploye, 10);
-        const [result] = await dbconfig_1.default.execute('INSERT INTO Employe (mailEmploye, mdpEmploye, prenomEmploye, nomEmploye, roleEmploye) VALUES (?, ?, ?, ?, ?)', [employe.mailEmploye, hashedPassword, employe.prenomEmploye, employe.nomEmploye, employe.roleEmploye]);
+        await dbconfig_1.default.query('INSERT INTO Employe (mailEmploye, mdpEmploye, prenomEmploye, nomEmploye, roleEmploye) VALUES ($1, $2, $3, $4, $5)', [employe.mailEmploye, hashedPassword, employe.prenomEmploye, employe.nomEmploye, employe.roleEmploye]);
         return employe.mailEmploye;
     }
     static async findByEmail(email) {
-        const [rows] = await dbconfig_1.default.execute('SELECT * FROM Employe WHERE mailEmploye = ?', [email]);
-        if (!rows.length)
+        const result = await dbconfig_1.default.query('SELECT * FROM Employe WHERE mailEmploye = $1', [email]);
+        if (!result.rows.length)
             return null;
-        const employe = rows[0];
+        const employe = result.rows[0];
         employe.roleEmploye = employe.roleEmploye;
         return employe;
     }
     static async update(email, employe) {
         let query = 'UPDATE Employe SET ';
         const params = [];
+        let paramIndex = 1;
         if (employe.prenomEmploye) {
-            query += 'prenomEmploye = ?, ';
+            query += `prenomEmploye = $${paramIndex++}, `;
             params.push(employe.prenomEmploye);
         }
         if (employe.nomEmploye) {
-            query += 'nomEmploye = ?, ';
+            query += `nomEmploye = $${paramIndex++}, `;
             params.push(employe.nomEmploye);
         }
         if (employe.mdpEmploye) {
-            query += 'mdpEmploye = ?, ';
+            query += `mdpEmploye = $${paramIndex++}, `;
             // Hasher le nouveau mot de passe automatiquement
             const hashedPassword = await this.hashPasswordIfNeeded(employe.mdpEmploye);
             params.push(hashedPassword);
         }
         // Enlever la virgule et l'espace à la fin
         query = query.slice(0, -2);
-        query += ' WHERE mailEmploye = ?';
+        query += ` WHERE mailEmploye = $${paramIndex}`;
         params.push(email);
-        const [result] = await dbconfig_1.default.execute(query, params);
-        return result.affectedRows > 0;
+        const result = await dbconfig_1.default.query(query, params);
+        return result.rowCount !== null && result.rowCount > 0;
     }
     static async getAll() {
-        const [rows] = await dbconfig_1.default.execute('SELECT * FROM Employe');
-        return rows;
+        const result = await dbconfig_1.default.query('SELECT * FROM Employe');
+        return result.rows;
     }
     static async verifyPassword(email, password) {
         const employe = await this.findByEmail(email);
@@ -87,7 +88,7 @@ class Employe {
             if (employe.mdpEmploye === password) {
                 // Hasher et mettre à jour
                 const hashedPassword = await bcrypt_1.default.hash(password, 10);
-                await dbconfig_1.default.execute('UPDATE Employe SET MDPEmploye = ? WHERE mailEmploye = ?', [hashedPassword, email]);
+                await dbconfig_1.default.query('UPDATE Employe SET mdpEmploye = $1 WHERE mailEmploye = $2', [hashedPassword, email]);
                 console.log(`✅ Mot de passe migré pour: ${email}`);
                 return true;
             }

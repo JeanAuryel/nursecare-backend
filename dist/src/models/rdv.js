@@ -7,11 +7,11 @@ exports.Rdv = void 0;
 const dbconfig_1 = __importDefault(require("../config/dbconfig"));
 class Rdv {
     static async create(rdv) {
-        await dbconfig_1.default.execute(`INSERT INTO RDV (
+        await dbconfig_1.default.query(`INSERT INTO RDV (
                 idEmploye, idPrestation, idPatient, idStagiaire,
                 timestamp_RDV_prevu, timestamp_RDV_reel, timestamp_RDV_facture, timestamp_RDV_integrePGI,
                 noteStagiaire, commentaireStagiaire
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, [
             rdv.idEmploye, rdv.idPrestation, rdv.idPatient, rdv.idStagiaire,
             rdv.timestamp_RDV_prevu, rdv.timestamp_RDV_reel, rdv.timestamp_RDV_facture, rdv.timestamp_RDV_integrePGI,
             rdv.noteStagiaire, rdv.commentaireStagiaire
@@ -19,23 +19,23 @@ class Rdv {
     }
     static async getAll() {
         try {
-            const [rows] = await dbconfig_1.default.execute(`
+            const result = await dbconfig_1.default.query(`
                 SELECT
                     r.*,
-                    JSON_OBJECT(
+                    json_build_object(
                         'idEmploye', e.idEmploye,
                         'nomEmploye', e.nomEmploye,
                         'prenomEmploye', e.prenomEmploye,
                         'mailEmploye', e.mailEmploye,
                         'roleEmploye', e.roleEmploye
                     ) as employe,
-                    JSON_OBJECT(
+                    json_build_object(
                         'idPrestation', pr.idPrestation,
                         'nomPrestation', pr.nomPrestation,
                         'prix_TTC', pr.prix_TTC,
                         'idCategorie', pr.idCategorie
                     ) as prestation,
-                    JSON_OBJECT(
+                    json_build_object(
                         'idPatient', p.idPatient,
                         'nomPatient', p.nomPatient,
                         'prenomPatient', p.prenomPatient,
@@ -43,7 +43,7 @@ class Rdv {
                         'numPatient', p.numPatient,
                         'mailPatient', p.mailPatient
                     ) as patient,
-                    JSON_OBJECT(
+                    json_build_object(
                         'idStagiaire', s.idStagiaire,
                         'nomStagiaire', s.nomStagiaire,
                         'prenomStagiaire', s.prenomStagiaire
@@ -55,22 +55,8 @@ class Rdv {
                 LEFT JOIN Stagiaire s ON r.idStagiaire = s.idStagiaire
                 ORDER BY r.timestamp_RDV_prevu DESC
             `);
-            // Parse JSON objects
-            return rows.map((row) => {
-                try {
-                    return {
-                        ...row,
-                        employe: typeof row.employe === 'string' ? JSON.parse(row.employe) : row.employe,
-                        prestation: typeof row.prestation === 'string' ? JSON.parse(row.prestation) : row.prestation,
-                        patient: typeof row.patient === 'string' ? JSON.parse(row.patient) : row.patient,
-                        stagiaire: typeof row.stagiaire === 'string' ? JSON.parse(row.stagiaire) : row.stagiaire
-                    };
-                }
-                catch (parseError) {
-                    console.error('Erreur parsing JSON pour RDV:', row.idRdv, parseError);
-                    return row;
-                }
-            });
+            // PostgreSQL returns JSON objects directly, no need to parse
+            return result.rows;
         }
         catch (error) {
             console.error('Erreur SQL dans Rdv.getAll():', error);
@@ -78,29 +64,29 @@ class Rdv {
         }
     }
     static async getOne(idEmploye, idPrestation, idPatient, idStagiaire) {
-        const [rows] = await dbconfig_1.default.execute(`SELECT * FROM RDV WHERE idEmploye = ? AND idPrestation = ? AND idPatient = ? AND idStagiaire = ?`, [idEmploye, idPrestation, idPatient, idStagiaire]);
-        return rows.length ? rows[0] : null;
+        const result = await dbconfig_1.default.query(`SELECT * FROM RDV WHERE idEmploye = $1 AND idPrestation = $2 AND idPatient = $3 AND idStagiaire = $4`, [idEmploye, idPrestation, idPatient, idStagiaire]);
+        return result.rows.length ? result.rows[0] : null;
     }
     static async update(rdv) {
-        const [result] = await dbconfig_1.default.execute(`UPDATE RDV SET
-                timestamp_RDV_prevu = ?, timestamp_RDV_reel = ?, timestamp_RDV_facture = ?, timestamp_RDV_integrePGI = ?,
-                noteStagiaire = ?, commentaireStagiaire = ?
-             WHERE idEmploye = ? AND idPrestation = ? AND idPatient = ? AND idStagiaire = ?`, [
+        const result = await dbconfig_1.default.query(`UPDATE RDV SET
+                timestamp_RDV_prevu = $1, timestamp_RDV_reel = $2, timestamp_RDV_facture = $3, timestamp_RDV_integrePGI = $4,
+                noteStagiaire = $5, commentaireStagiaire = $6
+             WHERE idEmploye = $7 AND idPrestation = $8 AND idPatient = $9 AND idStagiaire = $10`, [
             rdv.timestamp_RDV_prevu, rdv.timestamp_RDV_reel, rdv.timestamp_RDV_facture, rdv.timestamp_RDV_integrePGI,
             rdv.noteStagiaire, rdv.commentaireStagiaire,
             rdv.idEmploye, rdv.idPrestation, rdv.idPatient, rdv.idStagiaire
         ]);
-        return result.affectedRows;
+        return result.rowCount || 0;
     }
     static async delete(idEmploye, idPrestation, idPatient, idStagiaire) {
-        const [result] = await dbconfig_1.default.execute(`DELETE FROM RDV WHERE idEmploye = ? AND idPrestation = ? AND idPatient = ? AND idStagiaire = ?`, [idEmploye, idPrestation, idPatient, idStagiaire]);
-        return result.affectedRows;
+        const result = await dbconfig_1.default.query(`DELETE FROM RDV WHERE idEmploye = $1 AND idPrestation = $2 AND idPatient = $3 AND idStagiaire = $4`, [idEmploye, idPrestation, idPatient, idStagiaire]);
+        return result.rowCount || 0;
     }
     /**
      * Récupérer toutes les prestations réalisées avec détails
      */
     static async getPrestationsRealisees() {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
             SELECT
                 r.*,
                 e.nomEmploye,
@@ -121,13 +107,13 @@ class Rdv {
             WHERE r.timestamp_RDV_reel IS NOT NULL
             ORDER BY r.timestamp_RDV_reel DESC
         `);
-        return rows;
+        return result.rows;
     }
     /**
      * Récupérer les prestations à facturer (réalisées mais pas encore facturées)
      */
     static async getPrestationsAFacturer() {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
             SELECT
                 r.*,
                 e.nomEmploye,
@@ -149,13 +135,13 @@ class Rdv {
             AND r.timestamp_RDV_facture IS NULL
             ORDER BY r.timestamp_RDV_reel DESC
         `);
-        return rows;
+        return result.rows;
     }
     /**
      * Récupérer les prestations facturées
      */
     static async getPrestationsFacturees() {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
             SELECT
                 r.*,
                 e.nomEmploye,
@@ -176,27 +162,27 @@ class Rdv {
             WHERE r.timestamp_RDV_facture IS NOT NULL
             ORDER BY r.timestamp_RDV_facture DESC
         `);
-        return rows;
+        return result.rows;
     }
     /**
      * Marquer une prestation comme facturée
      */
     static async marquerFacturee(idRdv) {
-        const [result] = await dbconfig_1.default.execute(`UPDATE RDV SET timestamp_RDV_facture = NOW() WHERE idRdv = ?`, [idRdv]);
-        return result.affectedRows > 0;
+        const result = await dbconfig_1.default.query(`UPDATE RDV SET timestamp_RDV_facture = CURRENT_TIMESTAMP WHERE idRdv = $1`, [idRdv]);
+        return result.rowCount !== null && result.rowCount > 0;
     }
     /**
      * Marquer une prestation comme intégrée au PGI
      */
     static async marquerIntegrePGI(idRdv) {
-        const [result] = await dbconfig_1.default.execute(`UPDATE RDV SET timestamp_RDV_integrePGI = NOW() WHERE idRdv = ?`, [idRdv]);
-        return result.affectedRows > 0;
+        const result = await dbconfig_1.default.query(`UPDATE RDV SET timestamp_RDV_integrePGI = CURRENT_TIMESTAMP WHERE idRdv = $1`, [idRdv]);
+        return result.rowCount !== null && result.rowCount > 0;
     }
     /**
      * Récupérer une prestation par ID avec détails
      */
     static async getById(idRdv) {
-        const [rows] = await dbconfig_1.default.execute(`
+        const result = await dbconfig_1.default.query(`
             SELECT
                 r.*,
                 e.nomEmploye,
@@ -214,9 +200,9 @@ class Rdv {
             INNER JOIN Prestation pr ON r.idPrestation = pr.idPrestation
             INNER JOIN Patient p ON r.idPatient = p.idPatient
             INNER JOIN Stagiaire s ON r.idStagiaire = s.idStagiaire
-            WHERE r.idRdv = ?
+            WHERE r.idRdv = $1
         `, [idRdv]);
-        return rows.length > 0 ? rows[0] : null;
+        return result.rows.length > 0 ? result.rows[0] : null;
     }
 }
 exports.Rdv = Rdv;
