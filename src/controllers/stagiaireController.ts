@@ -15,7 +15,7 @@ export async function createStagiaire(req: Request, res: Response) {
       return res.status(400).json({ message: "ID école invalide." });
     }
 
-    const stagiaireData: IStagiaire = {
+    const stagiaireData: Omit<IStagiaire, 'idStagiaire'> = {
       nomStagiaire,
       prenomStagiaire,
       idEcole: parseInt(idEcole)
@@ -87,15 +87,15 @@ export async function updateStagiaire(req: Request, res: Response) {
       return res.status(400).json({ message: "ID école invalide." });
     }
 
-    const stagiaireData: IStagiaire = {
+    const stagiaireData: Partial<IStagiaire> = {
       nomStagiaire,
       prenomStagiaire,
       idEcole: parseInt(idEcole)
     };
 
-    const affectedRows = await Stagiaire.update(idStagiaire, stagiaireData);
+    const success = await Stagiaire.update(idStagiaire, stagiaireData);
 
-    if (affectedRows === 0) {
+    if (!success) {
       return res.status(404).json({ message: "Stagiaire non trouvé." });
     }
 
@@ -115,9 +115,9 @@ export async function deleteStagiaire(req: Request, res: Response) {
       return res.status(400).json({ message: "ID stagiaire invalide." });
     }
 
-    const affectedRows = await Stagiaire.delete(idStagiaire);
+    const success = await Stagiaire.delete(idStagiaire);
 
-    if (affectedRows === 0) {
+    if (!success) {
       return res.status(404).json({ message: "Stagiaire non trouvé." });
     }
 
