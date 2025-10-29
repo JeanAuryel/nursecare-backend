@@ -3,20 +3,23 @@ import { Patient, IPatient } from "../models/patient";
 
 export async function createPatient(req: Request, res: Response) {
   try {
-    const { nomPatient, prenomPatient, adressePatient, numPatient, mailPatient } = req.body;
+    const { nomPatient, prenomPatient, adressePatient, codePostalPatient, villePatient, telephonePatient, mailPatient, numSecuriteSociale } = req.body;
 
-    if (!nomPatient || !prenomPatient || !adressePatient || !numPatient || !mailPatient) {
+    if (!nomPatient || !prenomPatient || !adressePatient || !telephonePatient) {
       return res.status(400).json({
-        message: "Tous les champs sont requis (nom, prénom, adresse, numéro, email)."
+        message: "Les champs nom, prénom, adresse et téléphone sont requis."
       });
     }
 
-    const patientData: IPatient = {
+    const patientData: Omit<IPatient, 'idPatient'> = {
       nomPatient,
       prenomPatient,
       adressePatient,
-      numPatient,
-      mailPatient
+      codePostalPatient,
+      villePatient,
+      telephonePatient,
+      mailPatient,
+      numSecuriteSociale
     };
 
     const newPatientId = await Patient.create(patientData);
@@ -65,30 +68,26 @@ export async function getPatientById(req: Request, res: Response) {
 export async function updatePatient(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { nomPatient, prenomPatient, adressePatient, numPatient, mailPatient } = req.body;
+    const { nomPatient, prenomPatient, adressePatient, codePostalPatient, villePatient, telephonePatient, mailPatient, numSecuriteSociale } = req.body;
     const idPatient = parseInt(id);
 
     if (isNaN(idPatient)) {
       return res.status(400).json({ message: "ID patient invalide." });
     }
 
-    if (!nomPatient || !prenomPatient || !adressePatient || !numPatient || !mailPatient) {
-      return res.status(400).json({
-        message: "Tous les champs sont requis (nom, prénom, adresse, numéro, email)."
-      });
-    }
+    const patientData: Partial<IPatient> = {};
+    if (nomPatient !== undefined) patientData.nomPatient = nomPatient;
+    if (prenomPatient !== undefined) patientData.prenomPatient = prenomPatient;
+    if (adressePatient !== undefined) patientData.adressePatient = adressePatient;
+    if (codePostalPatient !== undefined) patientData.codePostalPatient = codePostalPatient;
+    if (villePatient !== undefined) patientData.villePatient = villePatient;
+    if (telephonePatient !== undefined) patientData.telephonePatient = telephonePatient;
+    if (mailPatient !== undefined) patientData.mailPatient = mailPatient;
+    if (numSecuriteSociale !== undefined) patientData.numSecuriteSociale = numSecuriteSociale;
 
-    const patientData: IPatient = {
-      nomPatient,
-      prenomPatient,
-      adressePatient,
-      numPatient,
-      mailPatient
-    };
+    const success = await Patient.update(idPatient, patientData);
 
-    const affectedRows = await Patient.update(idPatient, patientData);
-
-    if (affectedRows === 0) {
+    if (!success) {
       return res.status(404).json({ message: "Patient non trouvé." });
     }
 
@@ -108,9 +107,9 @@ export async function deletePatient(req: Request, res: Response) {
       return res.status(400).json({ message: "ID patient invalide." });
     }
 
-    const affectedRows = await Patient.delete(idPatient);
+    const success = await Patient.delete(idPatient);
 
-    if (affectedRows === 0) {
+    if (!success) {
       return res.status(404).json({ message: "Patient non trouvé." });
     }
 

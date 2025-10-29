@@ -1,21 +1,19 @@
 import { Request, Response } from "express";
-import { Ecole, IEcole, IEcoleForm } from "../models/ecole";
+import { Ecole, IEcole } from "../models/ecole";
 
 export async function createEcole(req: Request, res: Response) {
   try {
-    const { nomEcole, adresseEcole, villeEcole, codePostalEcole, numEcole, contactReferent } = req.body;
+    const { nomEcole, adresseEcole, telephoneEcole, mailEcole } = req.body;
 
-    if (!nomEcole || !adresseEcole || !villeEcole || !codePostalEcole || !numEcole || !contactReferent) {
-      return res.status(400).json({ message: "Tous les champs sont requis." });
+    if (!nomEcole) {
+      return res.status(400).json({ message: "Le nom de l'école est requis." });
     }
 
-    const ecoleData: IEcoleForm = {
+    const ecoleData: Omit<IEcole, 'idEcole'> = {
       nomEcole,
       adresseEcole,
-      villeEcole,
-      codePostalEcole,
-      numEcole,
-      contactReferent
+      telephoneEcole,
+      mailEcole
     };
 
     const newEcole = await Ecole.create(ecoleData);
@@ -69,20 +67,18 @@ export async function getEcoleById(req: Request, res: Response) {
 export async function updateEcole(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { nomEcole, adresseEcole, villeEcole, codePostalEcole, numEcole, contactReferent } = req.body;
+    const { nomEcole, adresseEcole, telephoneEcole, mailEcole } = req.body;
     const idEcole = parseInt(id);
 
     if (isNaN(idEcole)) {
       return res.status(400).json({ message: "ID école invalide." });
     }
 
-    const ecoleData: Partial<IEcoleForm> = {};
+    const ecoleData: Partial<IEcole> = {};
     if (nomEcole !== undefined) ecoleData.nomEcole = nomEcole;
     if (adresseEcole !== undefined) ecoleData.adresseEcole = adresseEcole;
-    if (villeEcole !== undefined) ecoleData.villeEcole = villeEcole;
-    if (codePostalEcole !== undefined) ecoleData.codePostalEcole = codePostalEcole;
-    if (numEcole !== undefined) ecoleData.numEcole = numEcole;
-    if (contactReferent !== undefined) ecoleData.contactReferent = contactReferent;
+    if (telephoneEcole !== undefined) ecoleData.telephoneEcole = telephoneEcole;
+    if (mailEcole !== undefined) ecoleData.mailEcole = mailEcole;
 
     const updatedEcole = await Ecole.update(idEcole, ecoleData);
 
@@ -109,15 +105,18 @@ export async function deleteEcole(req: Request, res: Response) {
       return res.status(400).json({ message: "ID école invalide." });
     }
 
-    const affectedRows = await Ecole.delete(idEcole);
+    const success = await Ecole.delete(idEcole);
 
-    if (affectedRows === 0) {
+    if (!success) {
       return res.status(404).json({ message: "École non trouvée." });
     }
 
     res.status(200).json({ message: "École supprimée avec succès" });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erreur suppression école:", error);
+    if (error.message?.includes('stagiaires actifs')) {
+      return res.status(400).json({ message: error.message });
+    }
     res.status(500).json({ message: "Erreur interne du serveur" });
   }
 }

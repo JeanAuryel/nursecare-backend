@@ -3,15 +3,15 @@ import { Prestation, IPrestation } from "../models/prestation";
 
 export async function createPrestation(req: Request, res: Response) {
   try {
-    const { nomPrestation, prix_TTC, idCategorie } = req.body;
+    const { nomPrestation, prixTTC, dureeEstimee, idCategorie } = req.body;
 
-    if (!nomPrestation || prix_TTC === undefined || !idCategorie) {
+    if (!nomPrestation || prixTTC === undefined || !idCategorie) {
       return res.status(400).json({
         message: "Tous les champs sont requis (nom, prix TTC, catégorie)."
       });
     }
 
-    if (isNaN(prix_TTC) || prix_TTC < 0) {
+    if (isNaN(prixTTC) || prixTTC < 0) {
       return res.status(400).json({ message: "Le prix TTC doit être un nombre positif." });
     }
 
@@ -19,9 +19,10 @@ export async function createPrestation(req: Request, res: Response) {
       return res.status(400).json({ message: "ID catégorie invalide." });
     }
 
-    const prestationData: IPrestation = {
+    const prestationData: Omit<IPrestation, 'idPrestation'> = {
       nomPrestation,
-      prix_TTC: parseFloat(prix_TTC),
+      prixTTC: parseFloat(prixTTC),
+      dureeEstimee: dureeEstimee ? parseInt(dureeEstimee) : undefined,
       idCategorie: parseInt(idCategorie)
     };
 
@@ -71,36 +72,32 @@ export async function getPrestationById(req: Request, res: Response) {
 export async function updatePrestation(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { nomPrestation, prix_TTC, idCategorie } = req.body;
+    const { nomPrestation, prixTTC, dureeEstimee, idCategorie } = req.body;
     const idPrestation = parseInt(id);
 
     if (isNaN(idPrestation)) {
       return res.status(400).json({ message: "ID prestation invalide." });
     }
 
-    if (!nomPrestation || prix_TTC === undefined || !idCategorie) {
-      return res.status(400).json({
-        message: "Tous les champs sont requis (nom, prix TTC, catégorie)."
-      });
+    const prestationData: Partial<IPrestation> = {};
+    if (nomPrestation !== undefined) prestationData.nomPrestation = nomPrestation;
+    if (prixTTC !== undefined) {
+      if (isNaN(prixTTC) || prixTTC < 0) {
+        return res.status(400).json({ message: "Le prix TTC doit être un nombre positif." });
+      }
+      prestationData.prixTTC = parseFloat(prixTTC);
+    }
+    if (dureeEstimee !== undefined) prestationData.dureeEstimee = parseInt(dureeEstimee);
+    if (idCategorie !== undefined) {
+      if (isNaN(idCategorie)) {
+        return res.status(400).json({ message: "ID catégorie invalide." });
+      }
+      prestationData.idCategorie = parseInt(idCategorie);
     }
 
-    if (isNaN(prix_TTC) || prix_TTC < 0) {
-      return res.status(400).json({ message: "Le prix TTC doit être un nombre positif." });
-    }
+    const success = await Prestation.update(idPrestation, prestationData);
 
-    if (isNaN(idCategorie)) {
-      return res.status(400).json({ message: "ID catégorie invalide." });
-    }
-
-    const prestationData: IPrestation = {
-      nomPrestation,
-      prix_TTC: parseFloat(prix_TTC),
-      idCategorie: parseInt(idCategorie)
-    };
-
-    const affectedRows = await Prestation.update(idPrestation, prestationData);
-
-    if (affectedRows === 0) {
+    if (!success) {
       return res.status(404).json({ message: "Prestation non trouvée." });
     }
 
@@ -120,9 +117,9 @@ export async function deletePrestation(req: Request, res: Response) {
       return res.status(400).json({ message: "ID prestation invalide." });
     }
 
-    const affectedRows = await Prestation.delete(idPrestation);
+    const success = await Prestation.delete(idPrestation);
 
-    if (affectedRows === 0) {
+    if (!success) {
       return res.status(404).json({ message: "Prestation non trouvée." });
     }
 

@@ -5,14 +5,13 @@ export interface IStagiaire {
     nomStagiaire: string;
     prenomStagiaire: string;
     idEcole: number;
-    idTuteur?: number; // ID de l'employé tuteur
     mailStagiaire?: string;
-    numStagiaire?: string;
-    dateDebutStage?: string;
-    dateFinStage?: string;
+    telephoneStagiaire?: string;
+    dateDebutStage?: Date;
+    dateFinStage?: Date;
+    actif?: boolean;
     // Relations
     ecole?: any;
-    tuteur?: any;
     notes?: any[]; // Notes et appréciations des RDV
 }
 
@@ -20,58 +19,82 @@ export interface IStagiaireDetailed extends IStagiaire {
     ecole: {
         idEcole: number;
         nomEcole: string;
-        contactReferent: string;
-    };
-    tuteur?: {
-        idEmploye: number;
-        nomEmploye: string;
-        prenomEmploye: string;
     };
     notes: Array<{
-        idRdv: number;
+        idBonObservation: number;
+        idRDV: number;
         noteStagiaire: number;
         commentaireStagiaire: string;
-        dateRdv: string;
+        dateHeureObservation: Date;
         nomPrestation: string;
+        evaluateur: {
+            nomEmploye: string;
+            prenomEmploye: string;
+        };
     }>;
 }
 
 export class Stagiaire {
-    static async create(stagiaire: Partial<IStagiaire>): Promise<number> {
+    /**
+     * Créer un nouveau stagiaire
+     */
+    static async create(stagiaire: Omit<IStagiaire, 'idStagiaire'>): Promise<number> {
         const result = await pool.query(
-            `INSERT INTO Stagiaire (nomStagiaire, prenomStagiaire, idEcole, idTuteur, mailStagiaire, numStagiaire, dateDebutStage, dateFinStage)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO "Stagiaire" (
+                "nomStagiaire", "prenomStagiaire", "idEcole",
+                "mailStagiaire", "telephoneStagiaire",
+                "dateDebutStage", "dateFinStage"
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING "idStagiaire"`,
             [
                 stagiaire.nomStagiaire,
                 stagiaire.prenomStagiaire,
                 stagiaire.idEcole,
-                stagiaire.idTuteur || null,
                 stagiaire.mailStagiaire || null,
-                stagiaire.numStagiaire || null,
+                stagiaire.telephoneStagiaire || null,
                 stagiaire.dateDebutStage || null,
                 stagiaire.dateFinStage || null
             ]
         );
-        return result.rows[0].idstagiaire;
+        return result.rows[0].idStagiaire;
     }
 
+    /**
+     * Récupérer tous les stagiaires actifs
+     */
     static async getAll(): Promise<IStagiaire[]> {
-        const result = await pool.query(`SELECT * FROM Stagiaire ORDER BY nomStagiaire, prenomStagiaire`);
+        const result = await pool.query(`
+            SELECT * FROM "Stagiaire"
+            WHERE "actif" = TRUE
+            ORDER BY "nomStagiaire", "prenomStagiaire"
+        `);
         return result.rows;
     }
 
+    /**
+     * Récupérer un stagiaire par ID
+     */
     static async getOne(idStagiaire: number): Promise<IStagiaire | null> {
-        const result = await pool.query(`SELECT * FROM Stagiaire WHERE idStagiaire = $1`, [idStagiaire]);
+        const result = await pool.query(
+            `SELECT * FROM "Stagiaire" WHERE "idStagiaire" = $1`,
+            [idStagiaire]
+        );
         return result.rows.length ? result.rows[0] : null;
     }
 
+    /**
+     * Récupérer un stagiaire avec toutes ses informations détaillées
+     */
     static async getOneDetailed(idStagiaire: number): Promise<IStagiaireDetailed | null> {
-        // Récupérer le stagiaire
+        // Récupérer le stagiaire avec son école
         const stagiairesResult = await pool.query(
-            `SELECT S.*, E.nomEcole, E.contactReferent
-             FROM Stagiaire S
-             LEFT JOIN Ecole E ON S.idEcole = E.idEcole
-             WHERE S.idStagiaire = ?`,
+            `SELECT
+                s.*,
+                e."nomEcole"
+             FROM "Stagiaire" s
+             LEFT JOIN "Ecole" e ON s."idEcole" = e."idEcole"
+             WHERE s."idStagiaire" = $1`,
             [idStagiaire]
         );
 
@@ -79,81 +102,169 @@ export class Stagiaire {
 
         const stagiaire = stagiairesResult.rows[0];
 
-        // Récupérer le tuteur si existe
-        if (stagiaire.idTuteur) {
-            const tuteursResult = await pool.query(
-                `SELECT idEmploye, nomEmploye, prenomEmploye FROM Employe WHERE idEmploye = $1`,
-                [stagiaire.idTuteur]
-            );
-            stagiaire.tuteur = tuteursResult.rows[0] || null;
-        }
+        // Structurer l'objet école
+        stagiaire.ecole = {
+            idEcole: stagiaire.idEcole,
+            nomEcole: stagiaire.nomEcole
+        };
 
-        // Récupérer les notes et appréciations
+        // Récupérer les bons d'observation (notes et appréciations)
         const notesResult = await pool.query(
-            `SELECT R.idRdv, R.noteStagiaire, R.commentaireStagiaire, R.timestamp_RDV_reel as dateRdv, P.nomPrestation
-             FROM RDV R
-             LEFT JOIN Prestation P ON R.idPrestation = P.idPrestation
-             WHERE R.idStagiaire = ? AND R.timestamp_RDV_reel IS NOT NULL
-             ORDER BY R.timestamp_RDV_reel DESC`,
+            `SELECT
+                bo."idBonObservation",
+                bo."idRDV",
+                bo."noteStagiaire",
+                bo."commentaireStagiaire",
+                bo."dateHeureObservation",
+                p."nomPrestation",
+                e."nomEmploye",
+                e."prenomEmploye"
+             FROM "BonObservation" bo
+             INNER JOIN "Prestation" p ON bo."idPrestation" = p."idPrestation"
+             INNER JOIN "Employe" e ON bo."idEmployeEvaluateur" = e."idEmploye"
+             WHERE bo."idStagiaire" = $1
+             ORDER BY bo."dateHeureObservation" DESC`,
             [idStagiaire]
         );
 
-        stagiaire.notes = notesResult.rows;
+        stagiaire.notes = notesResult.rows.map(note => ({
+            idBonObservation: note.idBonObservation,
+            idRDV: note.idRDV,
+            noteStagiaire: note.noteStagiaire,
+            commentaireStagiaire: note.commentaireStagiaire,
+            dateHeureObservation: note.dateHeureObservation,
+            nomPrestation: note.nomPrestation,
+            evaluateur: {
+                nomEmploye: note.nomEmploye,
+                prenomEmploye: note.prenomEmploye
+            }
+        }));
 
         return stagiaire;
     }
 
-    static async update(idStagiaire: number, stagiaire: Partial<IStagiaire>): Promise<number> {
+    /**
+     * Récupérer les stagiaires d'une école
+     */
+    static async getByEcole(idEcole: number): Promise<IStagiaire[]> {
+        const result = await pool.query(
+            `SELECT * FROM "Stagiaire"
+             WHERE "idEcole" = $1 AND "actif" = TRUE
+             ORDER BY "nomStagiaire", "prenomStagiaire"`,
+            [idEcole]
+        );
+        return result.rows;
+    }
+
+    /**
+     * Récupérer les stagiaires actuellement en stage
+     */
+    static async getActifs(): Promise<IStagiaire[]> {
+        const result = await pool.query(
+            `SELECT s.*, e."nomEcole"
+             FROM "Stagiaire" s
+             LEFT JOIN "Ecole" e ON s."idEcole" = e."idEcole"
+             WHERE s."actif" = TRUE
+               AND s."dateDebutStage" <= CURRENT_DATE
+               AND (s."dateFinStage" IS NULL OR s."dateFinStage" >= CURRENT_DATE)
+             ORDER BY s."nomStagiaire", s."prenomStagiaire"`
+        );
+        return result.rows;
+    }
+
+    /**
+     * Mettre à jour un stagiaire
+     */
+    static async update(idStagiaire: number, stagiaire: Partial<IStagiaire>): Promise<boolean> {
         const fields: string[] = [];
         const values: any[] = [];
         let paramIndex = 1;
 
         if (stagiaire.nomStagiaire !== undefined) {
-            fields.push(`nomStagiaire = $${paramIndex++}`);
+            fields.push(`"nomStagiaire" = $${paramIndex++}`);
             values.push(stagiaire.nomStagiaire);
         }
         if (stagiaire.prenomStagiaire !== undefined) {
-            fields.push(`prenomStagiaire = $${paramIndex++}`);
+            fields.push(`"prenomStagiaire" = $${paramIndex++}`);
             values.push(stagiaire.prenomStagiaire);
         }
         if (stagiaire.idEcole !== undefined) {
-            fields.push(`idEcole = $${paramIndex++}`);
+            fields.push(`"idEcole" = $${paramIndex++}`);
             values.push(stagiaire.idEcole);
         }
-        if (stagiaire.idTuteur !== undefined) {
-            fields.push(`idTuteur = $${paramIndex++}`);
-            values.push(stagiaire.idTuteur);
-        }
         if (stagiaire.mailStagiaire !== undefined) {
-            fields.push(`mailStagiaire = $${paramIndex++}`);
+            fields.push(`"mailStagiaire" = $${paramIndex++}`);
             values.push(stagiaire.mailStagiaire);
         }
-        if (stagiaire.numStagiaire !== undefined) {
-            fields.push(`numStagiaire = $${paramIndex++}`);
-            values.push(stagiaire.numStagiaire);
+        if (stagiaire.telephoneStagiaire !== undefined) {
+            fields.push(`"telephoneStagiaire" = $${paramIndex++}`);
+            values.push(stagiaire.telephoneStagiaire);
         }
         if (stagiaire.dateDebutStage !== undefined) {
-            fields.push(`dateDebutStage = $${paramIndex++}`);
+            fields.push(`"dateDebutStage" = $${paramIndex++}`);
             values.push(stagiaire.dateDebutStage);
         }
         if (stagiaire.dateFinStage !== undefined) {
-            fields.push(`dateFinStage = $${paramIndex++}`);
+            fields.push(`"dateFinStage" = $${paramIndex++}`);
             values.push(stagiaire.dateFinStage);
         }
 
-        if (fields.length === 0) return 0;
+        if (fields.length === 0) return false;
 
         values.push(idStagiaire);
 
         const result = await pool.query(
-            `UPDATE Stagiaire SET ${fields.join(', ')} WHERE idStagiaire = $${paramIndex}`,
+            `UPDATE "Stagiaire" SET ${fields.join(', ')} WHERE "idStagiaire" = $${paramIndex}`,
             values
         );
-        return result.rowCount || 0;
+        return result.rowCount !== null && result.rowCount > 0;
     }
 
-    static async delete(idStagiaire: number): Promise<number> {
-        const result = await pool.query(`DELETE FROM Stagiaire WHERE idStagiaire = $1`, [idStagiaire]);
-        return result.rowCount || 0;
+    /**
+     * Supprimer un stagiaire (soft delete)
+     */
+    static async delete(idStagiaire: number): Promise<boolean> {
+        const result = await pool.query(
+            `UPDATE "Stagiaire" SET "actif" = FALSE WHERE "idStagiaire" = $1`,
+            [idStagiaire]
+        );
+        return result.rowCount !== null && result.rowCount > 0;
+    }
+
+    /**
+     * Récupérer les statistiques d'un stagiaire
+     */
+    static async getStats(idStagiaire: number): Promise<any> {
+        const result = await pool.query(
+            `SELECT
+                COUNT(bo."idBonObservation") AS "nombreEvaluations",
+                AVG(bo."noteStagiaire") AS "moyenneNotes",
+                MIN(bo."noteStagiaire") AS "noteMin",
+                MAX(bo."noteStagiaire") AS "noteMax"
+             FROM "BonObservation" bo
+             WHERE bo."idStagiaire" = $1`,
+            [idStagiaire]
+        );
+
+        return result.rows[0];
+    }
+
+    /**
+     * Rechercher des stagiaires par nom ou prénom
+     */
+    static async search(searchTerm: string): Promise<IStagiaire[]> {
+        const result = await pool.query(
+            `SELECT s.*, e."nomEcole"
+             FROM "Stagiaire" s
+             LEFT JOIN "Ecole" e ON s."idEcole" = e."idEcole"
+             WHERE s."actif" = TRUE
+             AND (
+                LOWER(s."nomStagiaire") LIKE LOWER($1)
+                OR LOWER(s."prenomStagiaire") LIKE LOWER($1)
+             )
+             ORDER BY s."nomStagiaire", s."prenomStagiaire"`,
+            [`%${searchTerm}%`]
+        );
+        return result.rows;
     }
 }

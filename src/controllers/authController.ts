@@ -14,7 +14,7 @@ export async function login(req: Request, res: Response) {
     }
 
     const result = await pool.query(
-      "SELECT * FROM Employe WHERE mailEmploye = $1",
+      'SELECT * FROM "Employe" WHERE "mailEmploye" = $1',
       [mailEmploye]
     );
 

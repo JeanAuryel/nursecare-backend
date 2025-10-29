@@ -1,265 +1,418 @@
-import pool from '../config/dbconfig';
+// src/models/rdv.ts
+import pool from "../config/dbconfig";
 
-export interface IRdv {
-    idRdv?: number;
-    idEmploye: number;
-    idPrestation: number;
-    idPatient: number;
-    idStagiaire: number;
-    timestamp_RDV_prevu: Date;
-    timestamp_RDV_reel?: Date | null;
-    timestamp_RDV_facture?: Date | null;
-    timestamp_RDV_integrePGI?: Date | null;
-    noteStagiaire?: number | null;
-    commentaireStagiaire?: string | null;
+export enum StatutRDV {
+  PREVU = "PREVU",
+  REALISE = "REALISE",
+  ANNULE = "ANNULE"
 }
 
-export interface IRdvDetailed extends IRdv {
-    employe?: {
-        nomEmploye: string;
-        prenomEmploye: string;
-    };
-    prestation?: {
-        nomPrestation: string;
-        prix_TTC: number;
-    };
-    patient?: {
-        nomPatient: string;
-        prenomPatient: string;
-        adressePatient: string;
-        numPatient: string;
-    };
-    stagiaire?: {
-        nomStagiaire: string;
-        prenomStagiaire: string;
-    };
+export interface IRDV {
+  idRDV?: number;
+  idEmploye: number;
+  idPatient: number;
+  idStagiaire?: number | null;
+  dateHeurePrevu: Date;
+  dateHeureReel?: Date | null;
+  dureeEstimee?: number | null;
+  dureeReelle?: number | null;
+  statutRDV?: StatutRDV;
+  commentaireRDV?: string | null;
+  dateHeureFacture?: Date | null;
+  dateHeureIntegrePGI?: Date | null;
+  dateCreation?: Date;
+  dateModification?: Date;
 }
 
-export class Rdv {
-    static async create(rdv: IRdv): Promise<void> {
-        await pool.query(
-            `INSERT INTO RDV (
-                idEmploye, idPrestation, idPatient, idStagiaire,
-                timestamp_RDV_prevu, timestamp_RDV_reel, timestamp_RDV_facture, timestamp_RDV_integrePGI,
-                noteStagiaire, commentaireStagiaire
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [
-                rdv.idEmploye, rdv.idPrestation, rdv.idPatient, rdv.idStagiaire,
-                rdv.timestamp_RDV_prevu, rdv.timestamp_RDV_reel, rdv.timestamp_RDV_facture, rdv.timestamp_RDV_integrePGI,
-                rdv.noteStagiaire, rdv.commentaireStagiaire
-            ]
+export interface IRDVComplet extends IRDV {
+  nomEmploye?: string;
+  prenomEmploye?: string;
+  roleEmploye?: string;
+  nomPatient?: string;
+  prenomPatient?: string;
+  adressePatient?: string;
+  telephonePatient?: string;
+  nomStagiaire?: string;
+  prenomStagiaire?: string;
+}
+
+export interface IPrestationRDV {
+  idPrestation: number;
+  quantite: number;
+  prixUnitaire: number;
+}
+
+export class RDV {
+
+  /**
+   * Créer un nouveau RDV
+   */
+  static async create(rdv: Omit<IRDV, 'idRDV'>): Promise<number> {
+    const result = await pool.query(
+      `INSERT INTO "RDV"
+       ("idEmploye", "idPatient", "idStagiaire", "dateHeurePrevu",
+        "dureeEstimee", "statutRDV", "commentaireRDV")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING "idRDV"`,
+      [
+        rdv.idEmploye,
+        rdv.idPatient,
+        rdv.idStagiaire || null,
+        rdv.dateHeurePrevu,
+        rdv.dureeEstimee || null,
+        rdv.statutRDV || 'PREVU',
+        rdv.commentaireRDV || null
+      ]
+    );
+
+    return result.rows[0].idRDV;
+  }
+
+  /**
+   * Ajouter des prestations à un RDV
+   */
+  static async addPrestations(idRDV: number, prestations: IPrestationRDV[]): Promise<void> {
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      for (const prestation of prestations) {
+        await client.query(
+          `INSERT INTO "RDV_Prestation"
+           ("idRDV", "idPrestation", "quantite", "prixUnitaire")
+           VALUES ($1, $2, $3, $4)`,
+          [idRDV, prestation.idPrestation, prestation.quantite, prestation.prixUnitaire]
         );
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Trouver un RDV par ID
+   */
+  static async findById(id: number): Promise<IRDV | null> {
+    const result = await pool.query(
+      'SELECT * FROM "RDV" WHERE "idRDV" = $1',
+      [id]
+    );
+
+    if (!result.rows.length) return null;
+    return result.rows[0] as IRDV;
+  }
+
+  /**
+   * Trouver un RDV avec toutes les informations (jointures)
+   */
+  static async findByIdComplet(id: number): Promise<IRDVComplet | null> {
+    const result = await pool.query(
+      `SELECT
+        r.*,
+        e."nomEmploye",
+        e."prenomEmploye",
+        e."roleEmploye",
+        p."nomPatient",
+        p."prenomPatient",
+        p."adressePatient",
+        p."telephonePatient",
+        s."nomStagiaire",
+        s."prenomStagiaire"
+       FROM "RDV" r
+       INNER JOIN "Employe" e ON r."idEmploye" = e."idEmploye"
+       INNER JOIN "Patient" p ON r."idPatient" = p."idPatient"
+       LEFT JOIN "Stagiaire" s ON r."idStagiaire" = s."idStagiaire"
+       WHERE r."idRDV" = $1`,
+      [id]
+    );
+
+    if (!result.rows.length) return null;
+    return result.rows[0] as IRDVComplet;
+  }
+
+  /**
+   * Récupérer les RDV d'un infirmier pour une date donnée
+   */
+  static async getByEmployeAndDate(idEmploye: number, date: Date): Promise<IRDVComplet[]> {
+    const result = await pool.query(
+      `SELECT
+        r.*,
+        p."nomPatient",
+        p."prenomPatient",
+        p."adressePatient",
+        p."telephonePatient",
+        s."nomStagiaire",
+        s."prenomStagiaire"
+       FROM "RDV" r
+       INNER JOIN "Patient" p ON r."idPatient" = p."idPatient"
+       LEFT JOIN "Stagiaire" s ON r."idStagiaire" = s."idStagiaire"
+       WHERE r."idEmploye" = $1
+         AND DATE(r."dateHeurePrevu") = DATE($2)
+         AND r."statutRDV" = 'PREVU'
+       ORDER BY r."dateHeurePrevu" ASC`,
+      [idEmploye, date]
+    );
+
+    return result.rows as IRDVComplet[];
+  }
+
+  /**
+   * Récupérer les adresses des patients pour un infirmier et une date (pour calcul d'itinéraire)
+   */
+  static async getAddressesForRoute(idEmploye: number, date: Date): Promise<{ idRDV: number; adressePatient: string; dateHeurePrevu: Date }[]> {
+    const result = await pool.query(
+      `SELECT
+        r."idRDV",
+        p."adressePatient",
+        r."dateHeurePrevu"
+       FROM "RDV" r
+       INNER JOIN "Patient" p ON r."idPatient" = p."idPatient"
+       WHERE r."idEmploye" = $1
+         AND DATE(r."dateHeurePrevu") = DATE($2)
+         AND r."statutRDV" = 'PREVU'
+       ORDER BY r."dateHeurePrevu" ASC`,
+      [idEmploye, date]
+    );
+
+    return result.rows;
+  }
+
+  /**
+   * Récupérer les prestations d'un RDV
+   */
+  static async getPrestations(idRDV: number): Promise<any[]> {
+    const result = await pool.query(
+      `SELECT
+        rp."idPrestation",
+        pr."nomPrestation",
+        c."nomCategorie",
+        rp."quantite",
+        rp."prixUnitaire",
+        (rp."quantite" * rp."prixUnitaire") AS "montantTotal"
+       FROM "RDV_Prestation" rp
+       INNER JOIN "Prestation" pr ON rp."idPrestation" = pr."idPrestation"
+       INNER JOIN "Categorie" c ON pr."idCategorie" = c."idCategorie"
+       WHERE rp."idRDV" = $1`,
+      [idRDV]
+    );
+
+    return result.rows;
+  }
+
+  /**
+   * Calculer le montant total d'un RDV
+   */
+  static async calculateTotal(idRDV: number): Promise<number> {
+    const result = await pool.query(
+      `SELECT SUM(rp."quantite" * rp."prixUnitaire") AS "montantTotal"
+       FROM "RDV_Prestation" rp
+       WHERE rp."idRDV" = $1`,
+      [idRDV]
+    );
+
+    return parseFloat(result.rows[0].montantTotal || 0);
+  }
+
+  /**
+   * Mettre à jour un RDV
+   */
+  static async update(id: number, rdv: Partial<IRDV>): Promise<boolean> {
+    const fields: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (rdv.dateHeurePrevu !== undefined) {
+      fields.push(`"dateHeurePrevu" = $${paramIndex++}`);
+      values.push(rdv.dateHeurePrevu);
     }
 
-    static async getAll(): Promise<IRdvDetailed[]> {
-        try {
-            const result = await pool.query(`
-                SELECT
-                    r.*,
-                    json_build_object(
-                        'idEmploye', e.idEmploye,
-                        'nomEmploye', e.nomEmploye,
-                        'prenomEmploye', e.prenomEmploye,
-                        'mailEmploye', e.mailEmploye,
-                        'roleEmploye', e.roleEmploye
-                    ) as employe,
-                    json_build_object(
-                        'idPrestation', pr.idPrestation,
-                        'nomPrestation', pr.nomPrestation,
-                        'prix_TTC', pr.prix_TTC,
-                        'idCategorie', pr.idCategorie
-                    ) as prestation,
-                    json_build_object(
-                        'idPatient', p.idPatient,
-                        'nomPatient', p.nomPatient,
-                        'prenomPatient', p.prenomPatient,
-                        'adressePatient', p.adressePatient,
-                        'numPatient', p.numPatient,
-                        'mailPatient', p.mailPatient
-                    ) as patient,
-                    json_build_object(
-                        'idStagiaire', s.idStagiaire,
-                        'nomStagiaire', s.nomStagiaire,
-                        'prenomStagiaire', s.prenomStagiaire
-                    ) as stagiaire
-                FROM RDV r
-                LEFT JOIN Employe e ON r.idEmploye = e.idEmploye
-                LEFT JOIN Prestation pr ON r.idPrestation = pr.idPrestation
-                LEFT JOIN Patient p ON r.idPatient = p.idPatient
-                LEFT JOIN Stagiaire s ON r.idStagiaire = s.idStagiaire
-                ORDER BY r.timestamp_RDV_prevu DESC
-            `);
-
-            // PostgreSQL returns JSON objects directly, no need to parse
-            return result.rows;
-        } catch (error) {
-            console.error('Erreur SQL dans Rdv.getAll():', error);
-            throw error;
-        }
+    if (rdv.dateHeureReel !== undefined) {
+      fields.push(`"dateHeureReel" = $${paramIndex++}`);
+      values.push(rdv.dateHeureReel);
     }
 
-    static async getOne(idEmploye: number, idPrestation: number, idPatient: number, idStagiaire: number): Promise<IRdv | null> {
-        const result = await pool.query(
-            `SELECT * FROM RDV WHERE idEmploye = $1 AND idPrestation = $2 AND idPatient = $3 AND idStagiaire = $4`,
-            [idEmploye, idPrestation, idPatient, idStagiaire]
-        );
-        return result.rows.length ? result.rows[0] : null;
+    if (rdv.dureeEstimee !== undefined) {
+      fields.push(`"dureeEstimee" = $${paramIndex++}`);
+      values.push(rdv.dureeEstimee);
     }
 
-    static async update(rdv: IRdv): Promise<number> {
-        const result = await pool.query(
-            `UPDATE RDV SET
-                timestamp_RDV_prevu = $1, timestamp_RDV_reel = $2, timestamp_RDV_facture = $3, timestamp_RDV_integrePGI = $4,
-                noteStagiaire = $5, commentaireStagiaire = $6
-             WHERE idEmploye = $7 AND idPrestation = $8 AND idPatient = $9 AND idStagiaire = $10`,
-            [
-                rdv.timestamp_RDV_prevu, rdv.timestamp_RDV_reel, rdv.timestamp_RDV_facture, rdv.timestamp_RDV_integrePGI,
-                rdv.noteStagiaire, rdv.commentaireStagiaire,
-                rdv.idEmploye, rdv.idPrestation, rdv.idPatient, rdv.idStagiaire
-            ]
-        );
-        return result.rowCount || 0;
+    if (rdv.dureeReelle !== undefined) {
+      fields.push(`"dureeReelle" = $${paramIndex++}`);
+      values.push(rdv.dureeReelle);
     }
 
-    static async delete(idEmploye: number, idPrestation: number, idPatient: number, idStagiaire: number): Promise<number> {
-        const result = await pool.query(
-            `DELETE FROM RDV WHERE idEmploye = $1 AND idPrestation = $2 AND idPatient = $3 AND idStagiaire = $4`,
-            [idEmploye, idPrestation, idPatient, idStagiaire]
-        );
-        return result.rowCount || 0;
+    if (rdv.statutRDV !== undefined) {
+      fields.push(`"statutRDV" = $${paramIndex++}`);
+      values.push(rdv.statutRDV);
     }
 
-    /**
-     * Récupérer toutes les prestations réalisées avec détails
-     */
-    static async getPrestationsRealisees(): Promise<IRdvDetailed[]> {
-        const result = await pool.query(`
-            SELECT
-                r.*,
-                e.nomEmploye,
-                e.prenomEmploye,
-                pr.nomPrestation,
-                pr.prix_TTC,
-                p.nomPatient,
-                p.prenomPatient,
-                p.adressePatient,
-                p.numPatient,
-                s.nomStagiaire,
-                s.prenomStagiaire
-            FROM RDV r
-            INNER JOIN Employe e ON r.idEmploye = e.idEmploye
-            INNER JOIN Prestation pr ON r.idPrestation = pr.idPrestation
-            INNER JOIN Patient p ON r.idPatient = p.idPatient
-            INNER JOIN Stagiaire s ON r.idStagiaire = s.idStagiaire
-            WHERE r.timestamp_RDV_reel IS NOT NULL
-            ORDER BY r.timestamp_RDV_reel DESC
-        `);
-        return result.rows;
+    if (rdv.commentaireRDV !== undefined) {
+      fields.push(`"commentaireRDV" = $${paramIndex++}`);
+      values.push(rdv.commentaireRDV);
     }
 
-    /**
-     * Récupérer les prestations à facturer (réalisées mais pas encore facturées)
-     */
-    static async getPrestationsAFacturer(): Promise<IRdvDetailed[]> {
-        const result = await pool.query(`
-            SELECT
-                r.*,
-                e.nomEmploye,
-                e.prenomEmploye,
-                pr.nomPrestation,
-                pr.prix_TTC,
-                p.nomPatient,
-                p.prenomPatient,
-                p.adressePatient,
-                p.numPatient,
-                s.nomStagiaire,
-                s.prenomStagiaire
-            FROM RDV r
-            INNER JOIN Employe e ON r.idEmploye = e.idEmploye
-            INNER JOIN Prestation pr ON r.idPrestation = pr.idPrestation
-            INNER JOIN Patient p ON r.idPatient = p.idPatient
-            INNER JOIN Stagiaire s ON r.idStagiaire = s.idStagiaire
-            WHERE r.timestamp_RDV_reel IS NOT NULL
-            AND r.timestamp_RDV_facture IS NULL
-            ORDER BY r.timestamp_RDV_reel DESC
-        `);
-        return result.rows;
+    if (rdv.dateHeureFacture !== undefined) {
+      fields.push(`"dateHeureFacture" = $${paramIndex++}`);
+      values.push(rdv.dateHeureFacture);
     }
 
-    /**
-     * Récupérer les prestations facturées
-     */
-    static async getPrestationsFacturees(): Promise<IRdvDetailed[]> {
-        const result = await pool.query(`
-            SELECT
-                r.*,
-                e.nomEmploye,
-                e.prenomEmploye,
-                pr.nomPrestation,
-                pr.prix_TTC,
-                p.nomPatient,
-                p.prenomPatient,
-                p.adressePatient,
-                p.numPatient,
-                s.nomStagiaire,
-                s.prenomStagiaire
-            FROM RDV r
-            INNER JOIN Employe e ON r.idEmploye = e.idEmploye
-            INNER JOIN Prestation pr ON r.idPrestation = pr.idPrestation
-            INNER JOIN Patient p ON r.idPatient = p.idPatient
-            INNER JOIN Stagiaire s ON r.idStagiaire = s.idStagiaire
-            WHERE r.timestamp_RDV_facture IS NOT NULL
-            ORDER BY r.timestamp_RDV_facture DESC
-        `);
-        return result.rows;
+    if (rdv.dateHeureIntegrePGI !== undefined) {
+      fields.push(`"dateHeureIntegrePGI" = $${paramIndex++}`);
+      values.push(rdv.dateHeureIntegrePGI);
     }
 
-    /**
-     * Marquer une prestation comme facturée
-     */
-    static async marquerFacturee(idRdv: number): Promise<boolean> {
-        const result = await pool.query(
-            `UPDATE RDV SET timestamp_RDV_facture = CURRENT_TIMESTAMP WHERE idRdv = $1`,
-            [idRdv]
-        );
-        return result.rowCount !== null && result.rowCount > 0;
-    }
+    if (fields.length === 0) return false;
 
-    /**
-     * Marquer une prestation comme intégrée au PGI
-     */
-    static async marquerIntegrePGI(idRdv: number): Promise<boolean> {
-        const result = await pool.query(
-            `UPDATE RDV SET timestamp_RDV_integrePGI = CURRENT_TIMESTAMP WHERE idRdv = $1`,
-            [idRdv]
-        );
-        return result.rowCount !== null && result.rowCount > 0;
-    }
+    values.push(id);
 
-    /**
-     * Récupérer une prestation par ID avec détails
-     */
-    static async getById(idRdv: number): Promise<IRdvDetailed | null> {
-        const result = await pool.query(`
-            SELECT
-                r.*,
-                e.nomEmploye,
-                e.prenomEmploye,
-                pr.nomPrestation,
-                pr.prix_TTC,
-                p.nomPatient,
-                p.prenomPatient,
-                p.adressePatient,
-                p.numPatient,
-                s.nomStagiaire,
-                s.prenomStagiaire
-            FROM RDV r
-            INNER JOIN Employe e ON r.idEmploye = e.idEmploye
-            INNER JOIN Prestation pr ON r.idPrestation = pr.idPrestation
-            INNER JOIN Patient p ON r.idPatient = p.idPatient
-            INNER JOIN Stagiaire s ON r.idStagiaire = s.idStagiaire
-            WHERE r.idRdv = $1
-        `, [idRdv]);
-        return result.rows.length > 0 ? result.rows[0] : null;
-    }
+    const result = await pool.query(
+      `UPDATE "RDV" SET ${fields.join(', ')} WHERE "idRDV" = $${paramIndex}`,
+      values
+    );
+
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  /**
+   * Marquer un RDV comme réalisé
+   */
+  static async markAsRealise(id: number, dateHeureReel: Date, dureeReelle: number): Promise<boolean> {
+    const result = await pool.query(
+      `UPDATE "RDV"
+       SET "statutRDV" = 'REALISE',
+           "dateHeureReel" = $1,
+           "dureeReelle" = $2
+       WHERE "idRDV" = $3`,
+      [dateHeureReel, dureeReelle, id]
+    );
+
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  /**
+   * Marquer un RDV comme facturé
+   */
+  static async markAsFacture(id: number): Promise<boolean> {
+    const result = await pool.query(
+      `UPDATE "RDV"
+       SET "dateHeureFacture" = CURRENT_TIMESTAMP
+       WHERE "idRDV" = $1`,
+      [id]
+    );
+
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  /**
+   * Marquer un RDV comme intégré dans le PGI
+   */
+  static async markAsIntegrePGI(id: number): Promise<boolean> {
+    const result = await pool.query(
+      `UPDATE "RDV"
+       SET "dateHeureIntegrePGI" = CURRENT_TIMESTAMP
+       WHERE "idRDV" = $1`,
+      [id]
+    );
+
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  /**
+   * Annuler un RDV
+   */
+  static async cancel(id: number, motif: string): Promise<boolean> {
+    const result = await pool.query(
+      `UPDATE "RDV"
+       SET "statutRDV" = 'ANNULE',
+           "commentaireRDV" = $1
+       WHERE "idRDV" = $2`,
+      [motif, id]
+    );
+
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  /**
+   * Récupérer les RDV en attente d'intégration PGI
+   */
+  static async getPendingPGI(): Promise<IRDVComplet[]> {
+    const result = await pool.query(
+      `SELECT
+        r.*,
+        e."nomEmploye",
+        e."prenomEmploye",
+        p."nomPatient",
+        p."prenomPatient"
+       FROM "RDV" r
+       INNER JOIN "Employe" e ON r."idEmploye" = e."idEmploye"
+       INNER JOIN "Patient" p ON r."idPatient" = p."idPatient"
+       WHERE r."statutRDV" = 'REALISE'
+         AND r."dateHeureFacture" IS NOT NULL
+         AND r."dateHeureIntegrePGI" IS NULL
+       ORDER BY r."dateHeureFacture" ASC`
+    );
+
+    return result.rows as IRDVComplet[];
+  }
+
+  /**
+   * Récupérer les RDV réalisés non facturés
+   */
+  static async getUnbilled(): Promise<IRDVComplet[]> {
+    const result = await pool.query(
+      `SELECT
+        r.*,
+        e."nomEmploye",
+        e."prenomEmploye",
+        p."nomPatient",
+        p."prenomPatient"
+       FROM "RDV" r
+       INNER JOIN "Employe" e ON r."idEmploye" = e."idEmploye"
+       INNER JOIN "Patient" p ON r."idPatient" = p."idPatient"
+       WHERE r."statutRDV" = 'REALISE'
+         AND r."dateHeureFacture" IS NULL
+       ORDER BY r."dateHeureReel" DESC`
+    );
+
+    return result.rows as IRDVComplet[];
+  }
+
+  /**
+   * Compter les RDV par statut
+   */
+  static async countByStatus(): Promise<{ statutRDV: string; count: number }[]> {
+    const result = await pool.query(
+      `SELECT "statutRDV", COUNT(*) as count
+       FROM "RDV"
+       GROUP BY "statutRDV"`
+    );
+
+    return result.rows;
+  }
+
+  /**
+   * Récupérer les statistiques d'un infirmier pour une période
+   */
+  static async getStatsEmploye(idEmploye: number, dateDebut: Date, dateFin: Date): Promise<any> {
+    const result = await pool.query(
+      `SELECT
+        COUNT(DISTINCT r."idRDV") AS "nbInterventions",
+        SUM(r."dureeReelle") AS "dureeTotal",
+        SUM(rp."quantite" * rp."prixUnitaire") AS "caGenere"
+       FROM "RDV" r
+       LEFT JOIN "RDV_Prestation" rp ON r."idRDV" = rp."idRDV"
+       WHERE r."idEmploye" = $1
+         AND r."statutRDV" = 'REALISE'
+         AND r."dateHeureReel" BETWEEN $2 AND $3`,
+      [idEmploye, dateDebut, dateFin]
+    );
+
+    return result.rows[0];
+  }
 }
